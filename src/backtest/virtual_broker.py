@@ -54,6 +54,8 @@ class VirtualBroker:
                 pos = self.portfolio.positions.get(action.symbol)
                 if pos:
                     pos.current_stop_loss = action.stop_loss_price
+                    if action.target_price > 0:
+                        pos.current_target = action.target_price
 
     def expire_stale_pending_buys(
         self,
@@ -112,6 +114,7 @@ class VirtualBroker:
                     entry_price=fill_price,
                     current_stop_loss=order.stop_loss_price,
                     current_target=order.target_price,
+                    initial_stop_loss=order.stop_loss_price,
                     trade_id=trade_id,
                     entry_date=session_date,
                     entry_box_top=order.entry_box_top,

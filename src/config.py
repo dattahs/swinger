@@ -170,6 +170,14 @@ class TrailingStopConfig(BaseModel):
     max_trail_risk_pct: float = 10.0
 
 
+class RManagedRunnerConfig(BaseModel):
+    """Optional winner-management policy: breakeven at 2R, box ratchet, 5R target cap."""
+
+    enabled: bool = False
+    breakeven_r_threshold: float = 2.0
+    max_target_r: float = 5.0
+
+
 class CandidateRankingConfig(BaseModel):
     primary_metric: str = "structural_rr"
     tiebreakers: list[str] = Field(default_factory=lambda: ["sector_rs_percentile", "breakout_volume_ratio"])
@@ -206,6 +214,7 @@ class AppConfig(BaseModel):
     darvas_box: DarvasBoxConfig = Field(default_factory=DarvasBoxConfig)
     risk_management: RiskManagementConfig = Field(default_factory=RiskManagementConfig)
     trailing_stop: TrailingStopConfig = Field(default_factory=TrailingStopConfig)
+    r_managed_runner: RManagedRunnerConfig = Field(default_factory=RManagedRunnerConfig)
     candidate_ranking: CandidateRankingConfig = Field(default_factory=CandidateRankingConfig)
 
     @model_validator(mode="after")
@@ -267,6 +276,7 @@ def load_config_relaxed(path: str | Path) -> AppConfig:
         darvas_box=DarvasBoxConfig.model_validate(raw.get("darvas_box", {})),
         risk_management=RiskManagementConfig.model_validate(raw.get("risk_management", {})),
         trailing_stop=TrailingStopConfig.model_validate(raw.get("trailing_stop", {})),
+        r_managed_runner=RManagedRunnerConfig.model_validate(raw.get("r_managed_runner", {})),
         candidate_ranking=CandidateRankingConfig.model_validate(raw.get("candidate_ranking", {})),
         live=LiveConfig.model_validate(raw.get("live", {})),
     )

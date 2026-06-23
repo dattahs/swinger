@@ -162,11 +162,17 @@ def run_daily_strategy_iteration(
                 context.target_date,
                 config,
                 hold_sessions=hold_sessions,
+                last_close=last_closes.get(symbol),
             )
             if trail:
                 actions.append(trail)
                 if debug:
-                    reason = "STALE_BOX_TSL" if pos.stale_escalation_active else "TRAIL"
+                    if pos.stale_escalation_active:
+                        reason = "STALE_BOX_TSL"
+                    elif config.r_managed_runner.enabled and trail.stop_loss_price >= pos.entry_price:
+                        reason = "R_MANAGED_BREAKEVEN"
+                    else:
+                        reason = "TRAIL"
                     debug.log(
                         context.target_date,
                         "RISK",

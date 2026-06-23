@@ -377,4 +377,5 @@ class Backtester:
             "win_rate": round(wins / len(closed), 4) if closed else 0.0,
             "start_date": str(self._run_start or self.config.backtest.start_date),
             "end_date": str(self._run_end or self.config.backtest.end_date),
+            "r_managed_runner_enabled": self.config.r_managed_runner.enabled,
         }

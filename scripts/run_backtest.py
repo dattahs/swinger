@@ -36,6 +36,11 @@ def main() -> None:
         action="store_true",
         help="Disable session progress log to console/file",
     )
+    parser.add_argument(
+        "--enable-r-managed-runner",
+        action="store_true",
+        help="Enable R-managed runner (breakeven floor, box ratchet, 5R target cap)",
+    )
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -49,6 +54,8 @@ def main() -> None:
         cfg.backtest.debug_log.enabled = False
     if args.no_progress:
         cfg.backtest.progress_log.enabled = False
+    if args.enable_r_managed_runner:
+        cfg.r_managed_runner.enabled = True
 
     if args.seed_demo:
         from src.data.seed import seed_demo_data

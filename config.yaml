@@ -118,6 +118,12 @@ trailing_stop:
   min_ratchet_inr: 0.05
   max_trail_risk_pct: 10.0
 
+# Optional winner-management bundle (set enabled: true to activate; fully revertible).
+r_managed_runner:
+  enabled: false
+  breakeven_r_threshold: 0.8
+  max_target_r: 5.0
+
 candidate_ranking:
   primary_metric: structural_rr
   tiebreakers: [sector_rs_percentile, breakout_volume_ratio]

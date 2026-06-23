@@ -6,6 +6,7 @@ import math
 from datetime import date
 
 from src.config import AppConfig
+from src.engine.r_managed_runner import apply_breakeven_floor, cap_target_at_r
 from src.models import ActionType, BoxState, BoxStateEnum, OpenPosition, PlannedGTTAction, make_idempotency_key
 
 
@@ -15,6 +16,7 @@ def compute_entry_prices(box_top: float, box_bottom: float, cfg: AppConfig) -> t
     trigger_price = box_top + rm.gtt_trigger_buffer_inr
     stop_loss_price = box_bottom - rm.stop_loss_buffer_fraction_inr
     target_price = box_top + (box_top - box_bottom)
+    target_price = cap_target_at_r(entry_price, stop_loss_price, target_price, cfg)
     return entry_price, trigger_price, stop_loss_price, target_price
 
 
@@ -83,6 +85,7 @@ def compute_trail_action(
     cfg: AppConfig,
     *,
     hold_sessions: int = 0,
+    last_close: float | None = None,
 ) -> PlannedGTTAction | None:
     ts = cfg.trailing_stop
     rm = cfg.risk_management
@@ -92,14 +95,22 @@ def compute_trail_action(
         position.hold_anchor_date = target_date
         position.stale_escalation_active = False
 
-    if box_state.box_bottom is None or box_state.box_state == BoxStateEnum.SCANNING:
+    has_active_box = (
+        box_state.box_bottom is not None and box_state.box_state != BoxStateEnum.SCANNING
+    )
+    r_managed = cfg.r_managed_runner.enabled
+
+    if not has_active_box and not (r_managed and last_close is not None):
         return None
 
-    candidate_stop = max(position.current_stop_loss, box_state.box_bottom)
-    new_stop = candidate_stop
+    if has_active_box:
+        new_stop = max(position.current_stop_loss, box_state.box_bottom)
+    else:
+        new_stop = position.current_stop_loss
 
     if (
-        hold_sessions >= rm.max_hold_sessions
+        has_active_box
+        and hold_sessions >= rm.max_hold_sessions
         and boxes_match(
             position.entry_box_top,
             position.entry_box_bottom,
@@ -114,6 +125,9 @@ def compute_trail_action(
         if height > 0:
             daily_bump = height * (rm.stale_box_tsl_daily_pct / 100.0)
             new_stop = max(new_stop, position.current_stop_loss + daily_bump)
+
+    if r_managed and last_close is not None:
+        new_stop = apply_breakeven_floor(new_stop, last_close, position, cfg)
 
     risk_at_stop_inr = position.quantity * max(0.0, position.entry_price - new_stop)
     risk_pct = 100.0 * risk_at_stop_inr / account_equity if account_equity > 0 else 100.0
