@@ -1,0 +1,521 @@
+﻿================================================================================
+SESSION 2026-06-22  |  pricing EOD 2026-06-19  |  capital INR 100,000
+Warmup 2025-10-01 -> 2026-06-19  |  NIFTY trend: PASS
+GTT budget = cash x 1.3
+================================================================================
+
+[ALL SIZED BREAKOUT CANDIDATES - rank by structural RR]
+  # 1 SPLPETRO     RR=0.9982 qty=13  trigger=746.43  -> SELECTED
+  # 2 ENGINERSIN   RR=0.9950 qty=39  trigger=251.72  -> SELECTED
+  # 3 PARADEEP     RR=0.9933 qty=74  trigger=135.05  -> SELECTED
+
+================================================================================
+  VTL
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 646.005 / 613.3
+  box_start/end  : 2026-05-08 / None
+  breakout_date  : 2026-06-18
+  reversal_high  : 600.0
+  last_close     : 657.45
+  vol_sma_20     : 419722.4
+  reentry_blocked: True
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  620.05 H=  637.55 L=  612.90 C=  631.60  V=   460,424  grn
+  2026-06-05  O=  633.00 H=  640.80 L=  627.75 C=  631.40  V=   349,112  RED
+  2026-06-08  O=  626.50 H=  645.45 L=  615.80 C=  618.85  V=   310,196  RED
+  2026-06-09  O=  620.65 H=  638.00 L=  618.95 C=  620.85  V=    86,910  grn
+  2026-06-10  O=  620.00 H=  624.10 L=  602.50 C=  613.45  V=   183,151  RED
+  2026-06-11  O=  609.00 H=  638.00 L=  607.90 C=  614.45  V=   427,918  grn
+  2026-06-12  O=  619.90 H=  630.80 L=  616.25 C=  627.85  V=   220,540  grn
+  2026-06-15  O=  630.10 H=  650.85 L=  611.40 C=  637.80  V=   909,584  grn
+  2026-06-16  O=  638.10 H=  644.75 L=  630.00 C=  631.85  V=   216,547  RED
+  2026-06-17  O=  633.10 H=  636.20 L=  613.30 C=  626.15  V=   304,538  RED
+  2026-06-18  O=  632.00 H=  665.90 L=  630.00 C=  661.40  V= 1,413,690  grn
+  2026-06-19  O=  660.00 H=  670.05 L=  650.90 C=  657.45  V=   613,055  RED <-- pricing
+
+  close 657.45 vs SMA(20) 619.50  -> PASS
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 657.45  (min INR 100.0)
+  volume 613,055  (min 200,000)
+  turnover 40.47 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+    2026-06-19  O=660.00 C=657.45 V=613,055 vol_sma=419,722  RED +HV  <- red + high volume
+  -> PASS
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 657.45  box [613.30, 646.00]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 658.93)
+  re-entry blocked set : True
+  entry/trigger/stop/target: 646.00 / 646.05 / 613.25 / 678.71
+  structural RR: 0.9985  (min 0.99)
+  position size @ INR 1L: 15 shares  (cost INR 9,690)
+  session vol / vol_sma: 613,055 / 419,722 = 1.46x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : None
+  filter_pass        : True
+  filter_fail_reason : None
+  skip_reason        : BOX_RESET_REQUIRED
+  structural_rr      : None
+  trigger/stop/target: None / None / None
+  quantity           : None
+  selected           : False
+  action             : NO_CHANGE
+  -> REJECTED: BOX_RESET_REQUIRED (Re-entry blocked until box resets to SCANNING)
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [ΓûêΓûêΓûêΓûê] PASS
+  Breakout validity    [....] FAIL
+  In candidate pool    [....] FAIL
+  Selected GTT         [....] FAIL
+
+================================================================================
+  SPLPETRO
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 746.385 / 719.0
+  box_start/end  : 2026-05-14 / None
+  breakout_date  : 2026-06-19
+  reversal_high  : 696.1
+  last_close     : 750.25
+  vol_sma_20     : 79944.35
+  reentry_blocked: False
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  706.60 H=  724.90 L=  698.50 C=  703.50  V=    69,248  RED
+  2026-06-05  O=  703.90 H=  720.00 L=  694.10 C=  697.95  V=    76,505  RED
+  2026-06-08  O=  690.00 H=  690.00 L=  661.40 C=  668.00  V=    42,552  RED
+  2026-06-09  O=  668.00 H=  690.95 L=  667.40 C=  676.70  V=    65,585  grn
+  2026-06-10  O=  676.70 H=  693.90 L=  673.70 C=  675.90  V=    39,348  RED
+  2026-06-11  O=  668.00 H=  682.45 L=  663.10 C=  667.20  V=    59,387  RED
+  2026-06-12  O=  676.25 H=  708.00 L=  676.25 C=  702.10  V=    91,458  grn
+  2026-06-15  O=  709.40 H=  716.35 L=  699.00 C=  700.75  V=    68,857  RED
+  2026-06-16  O=  704.90 H=  732.20 L=  701.00 C=  703.50  V=    83,635  RED
+  2026-06-17  O=  710.50 H=  721.45 L=  698.35 C=  713.15  V=    83,062  grn
+  2026-06-18  O=  719.00 H=  728.25 L=  708.75 C=  721.70  V=    75,314  grn
+  2026-06-19  O=  724.80 H=  757.35 L=  719.00 C=  750.25  V=   450,869  grn <-- pricing
+
+  close 750.25 vs SMA(20) 692.15  -> PASS
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 750.25  (min INR 100.0)
+  volume 450,869  (min 200,000)
+  turnover 33.68 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+  -> PASS
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 750.25  box [719.00, 746.38]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 761.31)
+  re-entry blocked set : False
+  entry/trigger/stop/target: 746.38 / 746.43 / 718.95 / 773.77
+  structural RR: 0.9982  (min 0.99)
+  position size @ INR 1L: 13 shares  (cost INR 9,703)
+  session vol / vol_sma: 450,869 / 79,944 = 5.64x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : 1
+  filter_pass        : True
+  filter_fail_reason : None
+  skip_reason        : None
+  structural_rr      : 0.9982
+  trigger/stop/target: 746.435 / 718.95 / 773.77
+  quantity           : 13
+  selected           : True
+  action             : PLACE_BUY_GTT
+  -> SELECTED - PLACE_BUY_GTT
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [ΓûêΓûêΓûêΓûê] PASS
+  Breakout validity    [ΓûêΓûêΓûêΓûê] PASS
+  In candidate pool    [ΓûêΓûêΓûêΓûê] PASS
+  Selected GTT         [ΓûêΓûêΓûêΓûê] PASS
+
+================================================================================
+  ENGINERSIN
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 251.668 / 241.64
+  box_start/end  : 2026-05-25 / None
+  breakout_date  : 2026-06-18
+  reversal_high  : 229.45
+  last_close     : 250.74
+  vol_sma_20     : 4813437.9
+  reentry_blocked: False
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  227.40 H=  238.61 L=  225.02 C=  237.67  V= 4,223,885  grn
+  2026-06-05  O=  238.60 H=  240.50 L=  235.20 C=  237.78  V= 2,382,489  RED
+  2026-06-08  O=  234.01 H=  243.85 L=  232.16 C=  239.37  V= 4,779,777  grn
+  2026-06-09  O=  241.10 H=  242.37 L=  236.38 C=  239.37  V= 1,954,446  RED
+  2026-06-10  O=  238.50 H=  239.90 L=  231.00 C=  232.05  V= 2,000,951  RED
+  2026-06-11  O=  231.80 H=  233.00 L=  220.00 C=  223.95  V= 1,775,617  RED
+  2026-06-12  O=  225.10 H=  238.50 L=  225.10 C=  234.68  V= 3,699,138  grn
+  2026-06-15  O=  240.00 H=  242.29 L=  235.10 C=  236.07  V= 2,391,782  RED
+  2026-06-16  O=  238.55 H=  241.30 L=  231.00 C=  232.26  V= 3,310,923  RED
+  2026-06-17  O=  233.50 H=  244.65 L=  233.50 C=  243.19  V= 6,865,480  grn
+  2026-06-18  O=  245.74 H=  255.54 L=  241.64 C=  253.15  V=10,768,293  grn
+  2026-06-19  O=  253.50 H=  258.90 L=  248.20 C=  250.74  V= 6,016,884  RED <-- pricing
+
+  close 250.74 vs SMA(20) 234.07  -> PASS
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 250.74  (min INR 100.0)
+  volume 6,016,884  (min 200,000)
+  turnover 152.72 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+    2026-06-19  O=253.50 C=250.74 V=6,016,884 vol_sma=4,813,438  RED +HV  <- red + high volume
+  -> PASS
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 250.74  box [241.64, 251.67]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 256.70)
+  re-entry blocked set : False
+  entry/trigger/stop/target: 251.67 / 251.72 / 241.59 / 261.70
+  structural RR: 0.9950  (min 0.99)
+  position size @ INR 1L: 39 shares  (cost INR 9,815)
+  session vol / vol_sma: 6,016,884 / 4,813,438 = 1.25x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : 2
+  filter_pass        : True
+  filter_fail_reason : None
+  skip_reason        : None
+  structural_rr      : 0.995
+  trigger/stop/target: 251.71800000000002 / 241.58999999999997 / 261.696
+  quantity           : 39
+  selected           : True
+  action             : PLACE_BUY_GTT
+  -> SELECTED - PLACE_BUY_GTT
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [ΓûêΓûêΓûêΓûê] PASS
+  Breakout validity    [ΓûêΓûêΓûêΓûê] PASS
+  In candidate pool    [ΓûêΓûêΓûêΓûê] PASS
+  Selected GTT         [ΓûêΓûêΓûêΓûê] PASS
+
+================================================================================
+  PARADEEP
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 135.0 / 127.6
+  box_start/end  : 2026-05-05 / None
+  breakout_date  : 2026-06-19
+  reversal_high  : 127.25
+  last_close     : 136.22
+  vol_sma_20     : 4054333.35
+  reentry_blocked: False
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  127.15 H=  128.90 L=  125.50 C=  126.04  V= 2,351,899  RED
+  2026-06-05  O=  126.18 H=  131.99 L=  126.10 C=  127.58  V= 4,412,572  grn
+  2026-06-08  O=  126.06 H=  127.38 L=  123.00 C=  124.00  V= 1,977,326  RED
+  2026-06-09  O=  124.50 H=  126.64 L=  123.88 C=  126.26  V= 1,749,728  grn
+  2026-06-10  O=  126.60 H=  129.30 L=  123.00 C=  123.81  V= 2,672,227  RED
+  2026-06-11  O=  123.50 H=  123.70 L=  120.49 C=  121.51  V= 2,252,117  RED
+  2026-06-12  O=  123.00 H=  127.00 L=  123.00 C=  126.25  V= 2,329,626  grn
+  2026-06-15  O=  128.50 H=  130.49 L=  127.10 C=  127.60  V= 2,409,176  RED
+  2026-06-16  O=  128.19 H=  135.00 L=  127.60 C=  134.20  V=16,955,717  grn
+  2026-06-17  O=  135.27 H=  135.50 L=  132.21 C=  134.09  V= 5,012,988  RED
+  2026-06-18  O=  133.60 H=  135.29 L=  132.27 C=  134.25  V= 3,851,754  grn
+  2026-06-19  O=  134.15 H=  138.90 L=  133.61 C=  136.22  V= 8,663,706  grn <-- pricing
+
+  close 136.22 vs SMA(20) 127.61  -> PASS
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 136.22  (min INR 100.0)
+  volume 8,663,706  (min 200,000)
+  turnover 118.16 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+  -> PASS
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 136.22  box [127.60, 135.00]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 137.70)
+  re-entry blocked set : False
+  entry/trigger/stop/target: 135.00 / 135.05 / 127.55 / 142.40
+  structural RR: 0.9933  (min 0.99)
+  position size @ INR 1L: 74 shares  (cost INR 9,990)
+  session vol / vol_sma: 8,663,706 / 4,054,333 = 2.14x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : 3
+  filter_pass        : True
+  filter_fail_reason : None
+  skip_reason        : None
+  structural_rr      : 0.9933
+  trigger/stop/target: 135.05 / 127.55 / 142.4
+  quantity           : 74
+  selected           : True
+  action             : PLACE_BUY_GTT
+  -> SELECTED - PLACE_BUY_GTT
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [ΓûêΓûêΓûêΓûê] PASS
+  Breakout validity    [ΓûêΓûêΓûêΓûê] PASS
+  In candidate pool    [ΓûêΓûêΓûêΓûê] PASS
+  Selected GTT         [ΓûêΓûêΓûêΓûê] PASS
+
+================================================================================
+  ACE
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 966.5 / 931.15
+  box_start/end  : 2026-04-29 / None
+  breakout_date  : 2026-06-18
+  reversal_high  : 916.75
+  last_close     : 975.65
+  vol_sma_20     : 356727.2
+  reentry_blocked: True
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  861.00 H=  879.00 L=  861.00 C=  869.05  V=   102,497  grn
+  2026-06-05  O=  874.50 H=  909.00 L=  867.00 C=  900.30  V=   393,889  grn
+  2026-06-08  O=  880.65 H=  903.10 L=  865.50 C=  883.95  V=   241,743  grn
+  2026-06-09  O=  883.95 H=  915.40 L=  879.15 C=  894.15  V=   388,287  grn
+  2026-06-10  O=  893.00 H=  906.00 L=  875.00 C=  877.80  V=   398,979  RED
+  2026-06-11  O=  877.80 H=  904.25 L=  862.00 C=  891.95  V=   425,521  grn
+  2026-06-12  O=  904.00 H=  934.85 L=  896.45 C=  931.05  V=   691,582  grn
+  2026-06-15  O=  943.00 H=  953.00 L=  926.00 C=  928.95  V=   462,423  RED
+  2026-06-16  O=  936.95 H=  942.80 L=  922.50 C=  930.50  V=   164,366  RED
+  2026-06-17  O=  934.20 H=  966.50 L=  931.15 C=  962.10  V=   862,759  grn
+  2026-06-18  O=  966.40 H=  980.90 L=  956.00 C=  976.45  V=   746,212  grn
+  2026-06-19  O=  978.05 H=  984.95 L=  970.10 C=  975.65  V=   371,566  RED <-- pricing
+
+  close 975.65 vs SMA(20) 904.68  -> PASS
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 975.65  (min INR 100.0)
+  volume 371,566  (min 200,000)
+  turnover 36.28 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+    2026-06-19  O=978.05 C=975.65 V=371,566 vol_sma=356,727  RED +HV  <- red + high volume
+  -> PASS
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 975.65  box [931.15, 966.50]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 985.83)
+  re-entry blocked set : True
+  entry/trigger/stop/target: 966.50 / 966.55 / 931.10 / 1001.85
+  structural RR: 0.9986  (min 0.99)
+  position size @ INR 1L: 10 shares  (cost INR 9,665)
+  session vol / vol_sma: 371,566 / 356,727 = 1.04x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : None
+  filter_pass        : True
+  filter_fail_reason : None
+  skip_reason        : BOX_RESET_REQUIRED
+  structural_rr      : None
+  trigger/stop/target: None / None / None
+  quantity           : None
+  selected           : False
+  action             : NO_CHANGE
+  -> REJECTED: BOX_RESET_REQUIRED (Re-entry blocked until box resets to SCANNING)
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [ΓûêΓûêΓûêΓûê] PASS
+  Breakout validity    [....] FAIL
+  In candidate pool    [....] FAIL
+  Selected GTT         [....] FAIL
+
+================================================================================
+  VBL
+================================================================================
+
+[STATE REGISTRY] (warmup through pricing EOD)
+  box_state      : BREAKOUT
+  box_top/bottom : 555.8 / 526.35
+  box_start/end  : 2026-05-22 / None
+  breakout_date  : 2026-06-17
+  reversal_high  : 541.4
+  last_close     : 529.5
+  vol_sma_20     : 6354133.15
+  reentry_blocked: False
+
+[BARS] last 12 sessions through pricing 2026-06-19
+  2026-06-04  O=  533.00 H=  535.80 L=  527.15 C=  528.40  V= 2,968,198  RED
+  2026-06-05  O=  527.50 H=  527.90 L=  518.30 C=  523.30  V= 3,217,921  RED
+  2026-06-08  O=  518.30 H=  531.00 L=  511.50 C=  522.15  V= 5,396,987  grn
+  2026-06-09  O=  524.00 H=  531.25 L=  523.85 C=  529.75  V= 4,547,800  grn
+  2026-06-10  O=  530.00 H=  538.60 L=  524.35 C=  526.25  V= 3,150,329  RED
+  2026-06-11  O=  521.10 H=  532.30 L=  518.50 C=  519.90  V= 2,704,464  RED
+  2026-06-12  O=  526.00 H=  530.00 L=  517.50 C=  522.20  V= 2,335,737  RED
+  2026-06-15  O=  529.00 H=  543.35 L=  527.20 C=  541.00  V= 7,594,901  grn
+  2026-06-16  O=  543.35 H=  543.35 L=  536.10 C=  541.05  V= 3,831,572  RED
+  2026-06-17  O=  541.20 H=  555.80 L=  540.10 C=  544.05  V= 7,532,315  grn
+  2026-06-18  O=  547.70 H=  551.70 L=  529.90 C=  531.55  V= 8,122,763  RED
+  2026-06-19  O=  535.90 H=  538.70 L=  526.35 C=  529.50  V= 9,495,702  RED <-- pricing
+
+  close 529.50 vs SMA(20) 530.95  -> FAIL
+
+[GATE 1 ΓÇö UNIVERSE FILTERS]
+  close INR 529.50  (min INR 100.0)
+  volume 9,495,702  (min 200,000)
+  turnover 505.17 Cr  (min 10.0 Cr)
+  ASM/GSM: False
+  -> PASS
+
+[GATE 2 ΓÇö FUNDAMENTAL FILTERS]
+  rev_growth       20.0  (min 15.0)  PASS
+  eps_growth       20.0  (min 15.0)  PASS
+  roe              20.0  (min 15.0)  PASS
+  roce             18.0  (min 15.0)  PASS
+  promoter         50.0  (min 40.0)  PASS
+  D/E               0.3  (max 0.5)
+  earnings blackout: False
+  -> PASS
+
+[GATE 3 ΓÇö BOX STATE]
+  state == BREAKOUT : True
+
+[GATE 4 ΓÇö ENTRY SAFETY]
+    2026-06-18  O=547.70 C=531.55 V=8,122,763 vol_sma=6,221,888  RED +HV  <- red + high volume
+    2026-06-19  O=535.90 C=529.50 V=9,495,702 vol_sma=6,354,133  RED +HV  <- red + high volume
+  -> FAIL: PRICE_BELOW_SMA
+     (Close below SMA ΓÇö weak price momentum)
+
+[GATE 5 ΓÇö BREAKOUT VALIDITY + SIZING]
+  close 529.50  box [526.35, 555.80]
+  below box bottom     : False
+  stale (>top+2.0%): False  (threshold 566.92)
+  re-entry blocked set : False
+  entry/trigger/stop/target: 555.80 / 555.85 / 526.30 / 585.25
+  structural RR: 0.9983  (min 0.99)
+  position size @ INR 1L: 17 shares  (cost INR 9,449)
+  session vol / vol_sma: 9,495,702 / 6,354,133 = 1.49x
+
+[GATE 6 ΓÇö RANKING / SELECTION]
+  rank               : None
+  filter_pass        : False
+  filter_fail_reason : PRICE_BELOW_SMA
+  skip_reason        : None
+  structural_rr      : None
+  trigger/stop/target: None / None / None
+  quantity           : None
+  selected           : False
+  action             : NO_CHANGE
+  -> REJECTED at filters: PRICE_BELOW_SMA
+
+[PIPELINE MAP]
+  Universe             [ΓûêΓûêΓûêΓûê] PASS
+  Fundamentals         [ΓûêΓûêΓûêΓûê] PASS
+  BREAKOUT state       [ΓûêΓûêΓûêΓûê] PASS
+  Entry safety         [....] FAIL
+  Breakout validity    [----] n/a
+  In candidate pool    [....] FAIL
+  Selected GTT         [....] FAIL
+

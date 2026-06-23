@@ -1,0 +1,9 @@
+pydantic>=2.0
+pyyaml>=6.0
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0
+pytest>=7.0
+requests>=2.31
+tenacity>=8.2
+jugaad-data>=0.24
