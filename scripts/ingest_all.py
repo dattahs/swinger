@@ -26,7 +26,9 @@ def main() -> None:
     parser.add_argument("--verify-only", action="store_true", help="Check DB exists")
     args = parser.parse_args()
 
-    cfg = load_config(ROOT / args.config)
+    cfg = load_config(
+        Path(args.config) if Path(args.config).is_absolute() else ROOT / args.config
+    )
     db = Path(cfg.backtest.data_db_path)
     if not db.is_absolute():
         db = ROOT / db

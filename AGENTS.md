@@ -1,6 +1,6 @@
 # Swinger — Agent build instructions
 
-**Source of truth for v1 implementation:** [`REQUIREMENTS_v1.md`](REQUIREMENTS_v1.md) (v1.2 — includes PRD v5/v6 reconciliation in Section 0)
+**Source of truth for v1 implementation:** [`REQUIREMENTS_v1.md`](REQUIREMENTS_v1.md) (v1.3 — includes VPS live deployment in Section 0)
 
 Build modules in dependency order (Section 3). Do not implement v2 items marked out of scope.
 

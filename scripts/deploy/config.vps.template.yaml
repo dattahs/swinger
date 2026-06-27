@@ -1,0 +1,136 @@
+# VPS paths — copied to {remote_root}/shared/config.yaml on first setup if missing.
+# Edit shared/config.yaml on the server for secrets-free strategy tuning; it is NOT overwritten by deploy.
+
+system:
+  mode: discretionary
+  execution_segment: CASH
+  broker:
+    provider: upstox
+  auth:
+    token_refresh_strategy: manual_daily_login
+  storage:
+    live_backend: sqlite
+    backtest_backend: sqlite
+  networking:
+    static_ip_required: true
+    vps_public_ip: "203.0.113.10"
+
+backtest:
+  target_segment: NIFTY_500
+  start_date: "2018-01-01"
+  end_date: "2026-05-31"
+  initial_capital_inr: 500000.0
+  price_warmup_start_date: "2016-09-01"
+  export_directory: "/opt/swinger/shared/backtest_outputs"
+  timestamped_runs: true
+  simulation_slippage_pct: 0.05
+  execution_environment: local
+  data_db_path: "/opt/swinger/shared/data/processed/swinger_data.db"
+  progress_log:
+    enabled: true
+    log_to_console: false
+    log_file: "/opt/swinger/shared/logs/progress.log"
+  debug_log:
+    enabled: false
+
+universe_filters:
+  min_daily_volume_shares: 200000
+  min_daily_turnover_inr_cr: 10.0
+  min_stock_price_inr: 100.0
+  lookback_years_for_52wk_high: 1
+  new_high_lookback_weeks: 26
+  require_new_52wk_high: true
+  adaptive_new_high_lookback:
+    enabled: true
+    regime_index: "NIFTY 50"
+    sma_period: 80
+    min_lookback_weeks: 9
+    max_lookback_weeks: 39
+    calibration_years: 5
+    low_percentile: 10
+    high_percentile: 90
+    recalibration_cadence: daily
+    spread_jump_threshold_pct: 2.0
+  exclude_asm_gsm: true
+
+fundamental_filters:
+  source: nse_official_xbrl_pit
+  point_in_time_required: true
+  min_revenue_growth_pct: 15.0
+  min_eps_growth_pct: 15.0
+  min_roe_pct: 15.0
+  min_roce_pct: 15.0
+  max_debt_to_equity: 0.5
+  min_promoter_holding_pct: 40.0
+  avoid_days_before_earnings: 5
+  enforce_long_term_growth_group: true
+
+darvas_box:
+  box_bound_rule: hybrid_darvas_atr
+  darvas_reversal_days: 3
+  atr_period: 20
+  atr_multiplier: 2.0
+  min_box_duration_days: 4
+  max_box_duration_days: 30
+  min_box_height_pct: 3.0
+  max_box_height_pct: 20.0
+  breakout_volume_multiplier: 1.2
+  breakout_reset_above_top_pct: 4.0
+  required_price_history_days: 280
+  price_history_buffer_days: 50
+  market_trend_filter:
+    mode: sector_index
+    index: "NIFTY 50"
+    moving_averages: [50]
+    rule: index_close_above_ma50
+    allow_sector_trend_override: false
+
+risk_management:
+  account_risk_pct: 1.0
+  max_capital_per_trade_pct: 10.0
+  max_sector_exposure_pct: 30.0
+  max_concurrent_positions: 10
+  stop_loss_buffer_fraction_inr: 0.05
+  gtt_trigger_buffer_inr: 0.05
+  max_portfolio_loss_per_trade_pct: 10.0
+  min_structural_r_ratio: 0.99
+  kill_switch_daily_loss_limit_inr: 25000
+  kill_switch_evaluation_timing: eod_only
+  kill_switch_action: halt_new_entries
+  sector_classification_source: nse_official
+  gtt_expiry_sessions: 5
+  require_box_reset_for_reentry: true
+  max_hold_sessions: 63
+  stale_box_tsl_daily_pct: 10.0
+  box_same_tolerance_pct: 2.0
+  gtt_capital_overcommit_factor: 1.3
+  entry_require_close_above_sma: true
+  entry_sma_period: 20
+  entry_post_breakout_consecutive_red_high_vol: 2
+
+trailing_stop:
+  method: box_bottom_ratchet
+  min_ratchet_inr: 0.05
+  max_trail_risk_pct: 10.0
+
+r_managed_runner:
+  enabled: false
+
+candidate_ranking:
+  primary_metric: structural_rr
+  tiebreakers: [sector_rs_percentile, breakout_volume_ratio]
+  sector_rs_lookback_days: 63
+
+live:
+  paper_mode: true
+  local_db_path: /opt/swinger/shared/data/live/swinger_live.db
+  instrument_map_path: /opt/swinger/current/data/instruments/upstox_nse_eq.json
+  token_file: /opt/swinger/shared/data/live/upstox_token.json
+  upstox_redirect_uri: http://127.0.0.1:5000/callback
+  adopt_broker_truth: true
+  allow_drift: false
+  login_headless: true
+  warmup_state: true
+  warmup_from: "2025-10-01"
+  warmup_cache_dir: /opt/swinger/shared/data/live/warmup_cache
+  initial_capital_inr: 500000.0

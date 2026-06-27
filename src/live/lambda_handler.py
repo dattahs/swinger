@@ -1,4 +1,4 @@
-"""AWS Lambda entry point — REQUIREMENTS v1.2 Section 9."""
+"""AWS Lambda entry point — DEPRECATED (v1.3). Use scripts/run_live.py on VPS instead."""
 
 from __future__ import annotations
 

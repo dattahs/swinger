@@ -135,6 +135,8 @@ def reconcile_broker_state(
         for g in snapshot.gtt_orders
         if g.status in (GTTStatus.ACTIVE, GTTStatus.UNKNOWN)
     }
+    _apply_fills(session_date, snapshot.fills_today, repo, pending, drifts, adopt_broker_truth)
+
     for sym, prow in list(pending.items()):
         gid = str(prow.get("gtt_order_id", ""))
         if gid and gid not in active_gtts:
@@ -176,14 +178,14 @@ def reconcile_broker_state(
                 "status": "ACTIVE",
             }
 
-    _apply_fills(session_date, snapshot.fills_today, repo, pending, drifts, adopt_broker_truth)
-
     settled_cash = snapshot.funds.available_cash_inr
+    unsettled = snapshot.funds.unsettled_proceeds_inr
     repo.set_system_state(
         _BROKER_SYNC_KEY,
         {
             "last_sync_date": session_date.isoformat(),
             "settled_cash_inr": settled_cash,
+            "unsettled_proceeds_inr": unsettled,
             "drift_count": len(drifts),
             "snapshot_errors": snapshot.errors,
         },
@@ -204,6 +206,7 @@ def reconcile_broker_state(
         adopted_broker_truth=adopt_broker_truth and bool(drifts),
         pending_symbols=set(pending.keys()),
         settled_cash_inr=settled_cash,
+        unsettled_proceeds_inr=unsettled,
         open_positions_synced=open_count,
     )
 
@@ -265,10 +268,21 @@ def _apply_fills(
                     entry_date=session_date.isoformat(),
                 )
             else:
-                _establish_position_from_broker(
-                    repo,
-                    session_date,
-                    type("BP", (), {"symbol": sym, "quantity": fill.quantity, "average_price": fill.price})(),
+                trade_id = f"LIVE-{sym}-{session_date.isoformat()}-{uuid.uuid4().hex[:8]}"
+                repo.record_trade(
+                    TradeLedgerRow(
+                        trade_id=trade_id,
+                        timestamp=datetime.utcnow(),
+                        symbol=sym,
+                        direction="BUY",
+                        price=fill.price,
+                        quantity=fill.quantity,
+                        current_stop_loss=stop,
+                        current_target=target,
+                        gtt_buy_trigger_id=str(prow.get("gtt_order_id", "")) if prow else None,
+                        is_active=True,
+                        entry_date=session_date,
+                    )
                 )
 
 
@@ -290,8 +304,10 @@ def compute_equity(
     settled_cash_inr: float,
     open_positions: list[OpenPosition],
     price_map: dict[str, float],
+    *,
+    unsettled_proceeds_inr: float = 0.0,
 ) -> float:
-    equity = settled_cash_inr
+    equity = settled_cash_inr + unsettled_proceeds_inr
     for pos in open_positions:
         mark = price_map.get(pos.symbol, pos.entry_price)
         equity += mark * pos.quantity

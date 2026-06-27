@@ -149,6 +149,19 @@ def run_daily_strategy_iteration(
 
         if has_pos:
             pos = open_by_symbol[symbol]
+            if symbol not in context.symbols_with_oco and pos.current_stop_loss > 0:
+                actions.append(
+                    PlannedGTTAction(
+                        symbol=symbol,
+                        action_type=ActionType.ESTABLISH_OCO,
+                        stop_loss_price=pos.current_stop_loss,
+                        target_price=pos.current_target,
+                        quantity=pos.quantity,
+                        idempotency_key=make_idempotency_key(
+                            symbol, context.target_date, ActionType.ESTABLISH_OCO.value
+                        ),
+                    )
+                )
             anchor = pos.hold_anchor_date or pos.entry_date
             hold_sessions = (
                 count_hold_sessions(anchor, context.target_date, trading_days_to_date)

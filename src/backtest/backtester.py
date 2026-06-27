@@ -3,21 +3,34 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from src.backtest.data_cache import BacktestDataCache
 from src.backtest.virtual_broker import VirtualBroker
-from src.config import AppConfig
+from src.config import AppConfig, darvas_price_history_days
 from src.debug_log import ActionDebugLogger, ProgressLogger
 from src.data.sector_etfs import SECTOR_INDEX_SYMBOLS
 from src.engine.adaptive_lookback import reset_lookback_cadence_state
 from src.engine.engine import PriceDataMatrix, run_daily_strategy_iteration
 from src.models import ActionType, BoxStateEnum, MarketContext
 from src.repository.sqlite import SqliteBacktestRepository, SqliteDataLake
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BacktestRunResult:
+    summary: dict[str, Any]
+    closed_trades: list[dict]
+    equity_curve: list[dict]
+    out_dir: Path | None = None
 
 
 def evaluate_kill_switch(
@@ -77,8 +90,23 @@ class Backtester:
         self._breakout_reentry_blocked: set[str] = set()
         self._cache: BacktestDataCache | None = None
 
+    def _reset_for_run(self) -> None:
+        """Reset mutable run state while keeping the warmed data cache."""
+        self.repo = SqliteBacktestRepository()
+        self.broker = VirtualBroker(self.config.backtest.simulation_slippage_pct)
+        self.broker.set_initial_cash(self.config.backtest.initial_capital_inr)
+        self.equity_curve = []
+        self._prev_equity = None
+        self._run_start = None
+        self._run_end = None
+        self._run_dir = None
+        self._invoked_at = None
+        self._prev_box_states = {}
+        self._breakout_reentry_blocked = set()
+        reset_lookback_cadence_state()
+
     def _load_bars_for_universe(self, universe: list[str], end: date) -> dict[str, pd.DataFrame]:
-        days = self.config.darvas_box.required_price_history_days + 50
+        days = darvas_price_history_days(self.config)
         symbols = sorted(set(universe) | set(SECTOR_INDEX_SYMBOLS.values()))
         cache = self._cache
         if cache is None:
@@ -94,7 +122,14 @@ class Backtester:
             return self._cache.slice_bars(idx, end, days)
         return self.data_lake.get_daily_bars(idx, end, days)
 
-    def run(self, start: date | None = None, end: date | None = None) -> Path:
+    def run(
+        self,
+        start: date | None = None,
+        end: date | None = None,
+        *,
+        email_experiment: dict[str, Any] | None = None,
+        persist_outputs: bool = True,
+    ) -> Path | BacktestRunResult:
         start = start or self.config.backtest.start_date
         end = end or self.config.backtest.end_date
         self._run_start = start
@@ -105,44 +140,54 @@ class Backtester:
                 f"No trading days between {start} and {end}. Run data ingest first."
             )
 
-        out_dir = make_run_output_dir(self.config, self.repo_root)
-        self._run_dir = out_dir
-        self._invoked_at = datetime.now()
-        progress_path = out_dir / Path(self.config.backtest.progress_log.log_file).name
-        debug_path = out_dir / Path(self.config.backtest.debug_log.log_file).name
+        out_dir: Path | None = None
+        if persist_outputs:
+            out_dir = make_run_output_dir(self.config, self.repo_root)
+            self._run_dir = out_dir
+            self._invoked_at = datetime.now()
+            progress_path = out_dir / Path(self.config.backtest.progress_log.log_file).name
+            debug_path = out_dir / Path(self.config.backtest.debug_log.log_file).name
 
-        manifest = {
-            "invoked_at": self._invoked_at.isoformat(timespec="seconds"),
-            "run_directory": str(out_dir),
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "trading_days": len(trading_days),
-            "initial_capital_inr": self.config.backtest.initial_capital_inr,
-            "data_db_path": str(_resolve_path(self.repo_root, self.config.backtest.data_db_path)),
-            "debug_log_enabled": self.config.backtest.debug_log.enabled,
-            "progress_log_enabled": self.config.backtest.progress_log.enabled,
-        }
-        (out_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            manifest = {
+                "invoked_at": self._invoked_at.isoformat(timespec="seconds"),
+                "run_directory": str(out_dir),
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "trading_days": len(trading_days),
+                "initial_capital_inr": self.config.backtest.initial_capital_inr,
+                "data_db_path": str(_resolve_path(self.repo_root, self.config.backtest.data_db_path)),
+                "debug_log_enabled": self.config.backtest.debug_log.enabled,
+                "progress_log_enabled": self.config.backtest.progress_log.enabled,
+            }
+            (out_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-        self._progress.open(progress_path)
-        self._debug.open(debug_path)
-        self._progress.info(f"Output directory: {out_dir}")
-        self._progress.info(
-            f"Backtest starting: {start} to {end} ({len(trading_days)} trading days)"
-        )
-        if self._debug.enabled:
-            self._progress.info(f"Action debug log: {debug_path}")
+            self._progress.open(progress_path)
+            self._debug.open(debug_path)
+            self._progress.info(f"Output directory: {out_dir}")
+            self._progress.info(
+                f"Backtest starting: {start} to {end} ({len(trading_days)} trading days)"
+            )
+            if self._debug.enabled:
+                self._progress.info(f"Action debug log: {debug_path}")
+        else:
+            self._invoked_at = datetime.now()
 
-        reset_lookback_cadence_state()
-        run_start = time.monotonic()
-        self._progress.info("Warming in-memory data cache...")
-        warm_t0 = time.monotonic()
-        self._cache = BacktestDataCache(self.data_lake, self.config)
-        self._cache.warm(start, end)
-        self._progress.info(
-            f"Cache ready in {time.monotonic() - warm_t0:.1f}s "
-            f"({len(self._cache._bars_by_symbol)} symbols)"
-        )
+        if self._cache is None:
+            run_start = time.monotonic()
+            reset_lookback_cadence_state()
+            if persist_outputs:
+                self._progress.info("Warming in-memory data cache...")
+            warm_t0 = time.monotonic()
+            self._cache = BacktestDataCache(self.data_lake, self.config)
+            self._cache.warm(start, end)
+            if persist_outputs:
+                self._progress.info(
+                    f"Cache ready in {time.monotonic() - warm_t0:.1f}s "
+                    f"({len(self._cache._bars_by_symbol)} symbols)"
+                )
+        else:
+            run_start = time.monotonic()
+            reset_lookback_cadence_state()
 
         kill_state = self.repo.get_system_state("kill_switch") or {"active": False}
         state_registry = self.repo.get_state_registry()
@@ -328,11 +373,41 @@ class Backtester:
                     elapsed_sec=time.monotonic() - run_start,
                 )
         finally:
-            self._progress.info("Backtest loop finished — writing output files")
-            self._progress.close()
-            self._debug.close()
+            if persist_outputs:
+                self._progress.info("Backtest loop finished — writing output files")
+                self._progress.close()
+                self._debug.close()
 
-        return self.export_results(out_dir)
+        eq_df = pd.DataFrame(self.equity_curve)
+        summary = self._build_summary(eq_df)
+
+        if not persist_outputs:
+            return BacktestRunResult(
+                summary=summary,
+                closed_trades=list(self.broker.portfolio.closed_trades),
+                equity_curve=list(self.equity_curve),
+            )
+
+        out_dir = self.export_results(out_dir)
+        self._send_completion_email(out_dir, email_experiment=email_experiment)
+        return out_dir
+
+    def _send_completion_email(
+        self,
+        out_dir: Path,
+        *,
+        email_experiment: dict[str, Any] | None = None,
+    ) -> None:
+        if not self.config.backtest.send_email_on_complete:
+            return
+        try:
+            from src.notify.backtest_email import load_email_settings_from_env, send_backtest_results_email
+
+            settings = load_email_settings_from_env()
+            send_backtest_results_email(out_dir, settings, experiment=email_experiment)
+            logger.info("Backtest results emailed to %s", ", ".join(settings.to_addrs))
+        except Exception as exc:
+            logger.warning("Backtest completion email failed: %s", exc)
 
     def export_results(self, out_dir: Path | None = None) -> Path:
         out_dir = out_dir or _resolve_path(self.repo_root, self.config.backtest.export_directory)

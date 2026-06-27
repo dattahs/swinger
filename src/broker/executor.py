@@ -10,6 +10,7 @@ from src.broker.base import GTTBrokerClient
 from src.broker.instruments import InstrumentResolver
 from src.broker.upstox import UpstoxAPIError
 from src.models import ActionType, PlannedGTTAction
+from src.notify.gtt_alerts import GTTAlertEvent, notify_gtt_event
 from src.repository.base import Repository
 
 logger = logging.getLogger(__name__)
@@ -98,8 +99,21 @@ class GTTExecutor:
 
         if action.action_type == ActionType.PLACE_BUY_GTT:
             existing = pending.get(sym)
+            replaced_id: str | None = None
             if existing and existing.get("gtt_order_id"):
-                self.broker.cancel_gtt(str(existing["gtt_order_id"]))
+                replaced_id = str(existing["gtt_order_id"])
+                self.broker.cancel_gtt(replaced_id)
+                notify_gtt_event(
+                    GTTAlertEvent(
+                        verb="cancelled",
+                        action=action.model_copy(
+                            update={"action_type": ActionType.CANCEL_BUY_GTT}
+                        ),
+                        session_date=session_date,
+                        gtt_order_id=replaced_id,
+                    ),
+                    paper_mode=self.paper_mode,
+                )
             gtt_id = self.broker.place_buy_gtt(action, token)
             pending[sym] = {
                 "gtt_order_id": gtt_id,
@@ -112,20 +126,42 @@ class GTTExecutor:
                 "entry_box_bottom": action.entry_box_bottom,
                 "status": "ACTIVE",
             }
+            notify_gtt_event(
+                GTTAlertEvent(
+                    verb="placed",
+                    action=action,
+                    session_date=session_date,
+                    gtt_order_id=gtt_id,
+                    replaced_gtt_id=replaced_id,
+                ),
+                paper_mode=self.paper_mode,
+            )
             return gtt_id
 
         if action.action_type == ActionType.CANCEL_BUY_GTT:
             existing = pending.pop(sym, None)
             if existing and existing.get("gtt_order_id"):
-                self.broker.cancel_gtt(str(existing["gtt_order_id"]))
+                gid = str(existing["gtt_order_id"])
+                self.broker.cancel_gtt(gid)
+                notify_gtt_event(
+                    GTTAlertEvent(
+                        verb="cancelled",
+                        action=action,
+                        session_date=session_date,
+                        gtt_order_id=gid,
+                    ),
+                    paper_mode=self.paper_mode,
+                )
             return None
 
         if action.action_type in (ActionType.ESTABLISH_OCO, ActionType.TRAIL_OCO):
-            return self._handle_oco_action(action, token)
+            return self._handle_oco_action(action, token, session_date)
 
         raise UpstoxAPIError(f"Unsupported action {action.action_type}")
 
-    def _handle_oco_action(self, action: PlannedGTTAction, token: str) -> str:
+    def _handle_oco_action(
+        self, action: PlannedGTTAction, token: str, session_date: date
+    ) -> str:
         sym = action.symbol
         positions = [p for p in self.repo.get_open_positions() if p.symbol == sym]
         if not positions:
@@ -148,6 +184,15 @@ class GTTExecutor:
                     current_stop_loss=action.stop_loss_price,
                     current_target=action.target_price,
                 )
+            notify_gtt_event(
+                GTTAlertEvent(
+                    verb="updated",
+                    action=action,
+                    session_date=session_date,
+                    gtt_order_id=str(oco_id),
+                ),
+                paper_mode=self.paper_mode,
+            )
             return oco_id
 
         gtt_id = self.broker.place_oco_sell(
@@ -167,4 +212,13 @@ class GTTExecutor:
                 current_stop_loss=action.stop_loss_price,
                 current_target=action.target_price,
             )
+        notify_gtt_event(
+            GTTAlertEvent(
+                verb="placed",
+                action=action,
+                session_date=session_date,
+                gtt_order_id=gtt_id,
+            ),
+            paper_mode=self.paper_mode,
+        )
         return gtt_id

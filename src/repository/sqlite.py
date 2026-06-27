@@ -146,33 +146,33 @@ class SqliteDataLake:
         self.db_path = Path(db_path)
         if not self.db_path.exists():
             init_data_lake(self.db_path)
+        self._conn = sqlite3.connect(self.db_path)
+        self._conn.row_factory = sqlite3.Row
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return self._conn
 
     def get_trading_days(self, start: date, end: date) -> list[date]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT date FROM trading_calendar
-                WHERE is_trading_day = 1 AND date >= ? AND date <= ?
-                ORDER BY date
-                """,
-                (start.isoformat(), end.isoformat()),
-            ).fetchall()
+        conn = self._connect()
+        rows = conn.execute(
+            """
+            SELECT date FROM trading_calendar
+            WHERE is_trading_day = 1 AND date >= ? AND date <= ?
+            ORDER BY date
+            """,
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
         if rows:
             return [date.fromisoformat(r["date"]) for r in rows]
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT DISTINCT date FROM daily_bars
-                WHERE date >= ? AND date <= ?
-                ORDER BY date
-                """,
-                (start.isoformat(), end.isoformat()),
-            ).fetchall()
+        conn = self._connect()
+        rows = conn.execute(
+            """
+            SELECT DISTINCT date FROM daily_bars
+            WHERE date >= ? AND date <= ?
+            ORDER BY date
+            """,
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
         return [date.fromisoformat(r["date"]) for r in rows]
 
     def get_latest_trading_day(self, on_or_before: date | None = None) -> date | None:
@@ -181,31 +181,31 @@ class SqliteDataLake:
         return days[-1] if days else None
 
     def get_universe(self, as_of: date) -> list[str]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT symbol FROM nifty500_membership
-                WHERE effective_date = (
-                    SELECT MAX(effective_date) FROM nifty500_membership WHERE effective_date <= ?
-                )
-                """,
-                (as_of.isoformat(),),
-            ).fetchall()
+        conn = self._connect()
+        rows = conn.execute(
+            """
+            SELECT symbol FROM nifty500_membership
+            WHERE effective_date = (
+                SELECT MAX(effective_date) FROM nifty500_membership WHERE effective_date <= ?
+            )
+            """,
+            (as_of.isoformat(),),
+        ).fetchall()
         return [r["symbol"] for r in rows if not r["symbol"].startswith("DEMO")]
 
     def filter_symbols_with_bar_on(self, symbols: list[str], as_of: date) -> list[str]:
         """Keep only symbols that have an OHLCV bar on the given session date."""
         if not symbols:
             return []
-        with self._connect() as conn:
-            placeholders = ",".join("?" * len(symbols))
-            rows = conn.execute(
-                f"""
-                SELECT symbol FROM daily_bars
-                WHERE date = ? AND symbol IN ({placeholders})
-                """,
-                (as_of.isoformat(), *symbols),
-            ).fetchall()
+        conn = self._connect()
+        placeholders = ",".join("?" * len(symbols))
+        rows = conn.execute(
+            f"""
+            SELECT symbol FROM daily_bars
+            WHERE date = ? AND symbol IN ({placeholders})
+            """,
+            (as_of.isoformat(), *symbols),
+        ).fetchall()
         have = {r["symbol"] for r in rows}
         return [s for s in symbols if s in have]
 
@@ -218,61 +218,61 @@ class SqliteDataLake:
         return self.filter_symbols_with_bar_on(candidates, as_of)
 
     def get_daily_bars(self, symbol: str, end: date, days: int) -> pd.DataFrame:
-        with self._connect() as conn:
-            df = pd.read_sql_query(
-                """
-                SELECT symbol, date, open, high, low, close, volume, turnover_inr
-                FROM daily_bars
-                WHERE symbol = ? AND date <= ?
-                ORDER BY date DESC
-                LIMIT ?
-                """,
-                conn,
-                params=(symbol, end.isoformat(), days),
-            )
+        conn = self._connect()
+        df = pd.read_sql_query(
+            """
+            SELECT symbol, date, open, high, low, close, volume, turnover_inr
+            FROM daily_bars
+            WHERE symbol = ? AND date <= ?
+            ORDER BY date DESC
+            LIMIT ?
+            """,
+            conn,
+            params=(symbol, end.isoformat(), days),
+        )
         if df.empty:
             return df
         df["date"] = pd.to_datetime(df["date"]).dt.date
         return df.sort_values("date").reset_index(drop=True)
 
     def get_fundamentals_pit(self, symbol: str, as_of: date) -> dict[str, float]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT metric, value FROM fundamentals_pit f
-                WHERE symbol = ? AND effective_date = (
-                    SELECT MAX(effective_date) FROM fundamentals_pit
-                    WHERE symbol = f.symbol AND metric = f.metric AND effective_date <= ?
-                )
-                """,
-                (symbol, as_of.isoformat()),
-            ).fetchall()
+        conn = self._connect()
+        rows = conn.execute(
+            """
+            SELECT metric, value FROM fundamentals_pit f
+            WHERE symbol = ? AND effective_date = (
+                SELECT MAX(effective_date) FROM fundamentals_pit
+                WHERE symbol = f.symbol AND metric = f.metric AND effective_date <= ?
+            )
+            """,
+            (symbol, as_of.isoformat()),
+        ).fetchall()
         return {r["metric"]: r["value"] for r in rows}
 
     def get_sector(self, symbol: str) -> str:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT sector FROM sector_map WHERE symbol = ?", (symbol,)
-            ).fetchone()
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT sector FROM sector_map WHERE symbol = ?", (symbol,)
+        ).fetchone()
         return row["sector"] if row else "UNKNOWN"
 
     def is_asm_gsm(self, symbol: str, as_of: date) -> bool:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM asm_gsm_exclusions WHERE symbol = ? AND date = ?",
-                (symbol, as_of.isoformat()),
-            ).fetchone()
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT 1 FROM asm_gsm_exclusions WHERE symbol = ? AND date = ?",
+            (symbol, as_of.isoformat()),
+        ).fetchone()
         return row is not None
 
     def has_upcoming_earnings(self, symbol: str, as_of: date, days: int) -> bool:
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT 1 FROM earnings_calendar
-                WHERE symbol = ? AND event_date > ? AND julianday(event_date) <= julianday(?) + ?
-                """,
-                (symbol, as_of.isoformat(), as_of.isoformat(), days),
-            ).fetchone()
+        conn = self._connect()
+        row = conn.execute(
+            """
+            SELECT 1 FROM earnings_calendar
+            WHERE symbol = ? AND event_date > ? AND julianday(event_date) <= julianday(?) + ?
+            """,
+            (symbol, as_of.isoformat(), as_of.isoformat(), days),
+        ).fetchone()
         return row is not None
 
 

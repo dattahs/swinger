@@ -1,0 +1,23 @@
+# Copy to deploy.config.yaml (gitignored) and fill in your VPS details.
+#
+#   copy scripts\deploy\deploy.config.example.yaml scripts\deploy\deploy.config.yaml
+
+host: "203.0.113.10"          # VPS public IP or hostname
+user: "deploy"                 # SSH user with write access to remote_root
+port: 22
+ssh_key: "~/.ssh/id_ed25519"   # path to private key (expand ~ on Windows via Python)
+
+remote_root: "/opt/swinger"    # install root on VPS
+release_keep: 5                # retained releases under releases/
+
+python: "python3"              # python3.11+ on VPS
+venv_name: "venv"              # venv at {remote_root}/{venv_name}
+
+# Config and secrets — edit on laptop under scripts/deploy/vps/, pushed each deploy
+laptop_config: "scripts/deploy/vps/config.yaml"
+laptop_env: "scripts/deploy/vps/.env"
+
+# Cron schedules (IST) — applied by setup-vps.sh
+cron_login: "45 8 * * 1-5"    # Mon–Fri 08:45 IST — TOTP token refresh (fully_automated)
+cron_live: "30 16 * * 1-5"     # Mon–Fri 16:30 live run
+cron_ingest: "0 17 * * 1-5"    # Mon–Fri 17:00 bhavcopy ingest (after NSE publish)

@@ -25,7 +25,7 @@ A **local, CLI-driven backtest** that replays the Darvas Box strategy once per N
 
 ### 1.3 Out of scope for this plan
 
-- Live Lambda, DynamoDB, Upstox/Kite order placement (M6–M8 in REQUIREMENTS §3)
+- Live VPS, SQLite live DB, Upstox/Kite order placement (M6–M8 in REQUIREMENTS §3)
 - Web dashboard, LLM advisor (v2)
 - Intraday bars, tick data, `ALL_NSE` universe
 

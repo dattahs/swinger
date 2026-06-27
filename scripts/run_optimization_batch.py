@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.backtest.backtester import Backtester
-from src.config import load_config_relaxed
+from src.config import apply_darvas_algo_overrides, load_config_relaxed
 from src.notify.backtest_email import load_email_settings_from_env, send_backtest_results_email
 
 LOG_PATH = ROOT / "src" / "agentic-loop" / "experiment-log.jsonl"
@@ -33,20 +33,6 @@ class Experiment:
     overrides: dict[str, Any] = field(default_factory=dict)
 
 
-def _deep_set(cfg, path: str, value: Any):
-    parts = path.split(".")
-    obj = cfg
-    for p in parts[:-1]:
-        obj = getattr(obj, p)
-    setattr(obj, parts[-1], value)
-
-
-def apply_overrides(cfg, overrides: dict[str, Any]):
-    cfg = cfg.model_copy(deep=True)
-    for path, value in overrides.items():
-        _deep_set(cfg, path, value)
-    return cfg
-
 
 def apply_cadence(cfg, cadence: str):
     cfg = cfg.model_copy(deep=True)
@@ -56,10 +42,11 @@ def apply_cadence(cfg, cadence: str):
 
 def run_experiment(exp: Experiment, iteration: int, *, send_email: bool = True) -> dict:
     cfg = load_config_relaxed(ROOT / "config.yaml")
-    cfg = apply_overrides(cfg, exp.overrides)
+    cfg = apply_darvas_algo_overrides(cfg, exp.overrides)
     cfg = apply_cadence(cfg, exp.cadence)
     cfg.backtest.progress_log.enabled = False
     cfg.backtest.debug_log.enabled = False
+    cfg.backtest.send_email_on_complete = False
 
     t0 = time.monotonic()
     bt = Backtester(cfg, repo_root=ROOT)

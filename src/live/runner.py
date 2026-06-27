@@ -13,8 +13,10 @@ from src.broker.auth import TokenStore, UpstoxLoginAutomator
 from src.broker.executor import GTTExecutor
 from src.broker.instruments import InstrumentResolver
 from src.broker.reconcile import compute_equity, reconcile_broker_state
+from src.broker.base import GTTBrokerClient
+from src.broker.mock_upstox import MockUpstoxGTTClient
 from src.broker.upstox import UpstoxGTTClient
-from src.config import AppConfig, LiveConfig
+from src.config import AppConfig, LiveConfig, darvas_price_history_days
 from src.engine.engine import PriceDataMatrix, run_daily_strategy_iteration
 from src.models import ActionType, MarketContext, PlannedGTTAction, make_idempotency_key
 from src.repository.base import Repository
@@ -34,6 +36,7 @@ class LiveRunReport:
     actions_executed: int
     execution_failures: int
     kill_switch_active: bool
+    fills_today: list[dict] | None = None
 
 
 class LiveRunner:
@@ -80,7 +83,15 @@ class LiveRunner:
         p = Path(path_str)
         return p if p.is_absolute() else self.repo_root / p
 
-    def _build_broker(self, access_token: str) -> UpstoxGTTClient:
+    def _build_broker(self, access_token: str) -> GTTBrokerClient:
+        if self.live.mock_broker:
+            return MockUpstoxGTTClient(
+                self.repo,
+                self.data_lake,
+                self.instruments,
+                slippage_pct=self.config.backtest.simulation_slippage_pct,
+                initial_capital_inr=self.live.initial_capital_inr,
+            )
         return UpstoxGTTClient(
             access_token=access_token,
             instruments=self.instruments,
@@ -109,6 +120,13 @@ class LiveRunner:
             adopt_broker_truth=self.live.adopt_broker_truth,
         )
         settled_cash = recon.settled_cash_inr
+        if self.live.override_broker_capital:
+            settled_cash = self.live.initial_capital_inr
+            logger.info(
+                "Using configured book capital ₹%.0f (override_broker_capital; broker reported ₹%.0f)",
+                settled_cash,
+                recon.settled_cash_inr,
+            )
         if self.live.paper_mode and settled_cash <= 0 and not self.repo.get_system_state("equity_snapshot"):
             settled_cash = self.live.initial_capital_inr
             self.repo.set_system_state(
@@ -127,7 +145,12 @@ class LiveRunner:
 
         open_positions = self.repo.get_open_positions()
         price_map = self._close_prices(pricing_date)
-        equity = compute_equity(settled_cash, open_positions, price_map)
+        equity = compute_equity(
+            settled_cash,
+            open_positions,
+            price_map,
+            unsettled_proceeds_inr=recon.unsettled_proceeds_inr,
+        )
 
         prev_equity = (self.repo.get_system_state("equity_snapshot") or {}).get("equity_inr")
         kill_state = self.repo.get_system_state("kill_switch") or {"active": False}
@@ -160,12 +183,21 @@ class LiveRunner:
         expiry_cancels = self._expire_stale_pending(session_date, trading_days)
         blocked_raw = self.repo.get_system_state("breakout_reentry_blocked") or {}
         breakout_reentry_blocked = set(blocked_raw.get("symbols", []))
+        oco_map = self.repo.get_system_state("oco_by_symbol") or {}
+        strategy_date = pricing_date if pricing_date < session_date else session_date
+        if strategy_date != session_date:
+            logger.info(
+                "Strategy iteration uses pricing date %s (session %s; bhavcopy not yet ingested)",
+                strategy_date,
+                session_date,
+            )
         context = MarketContext(
-            target_date=session_date,
+            target_date=strategy_date,
             account_equity=equity,
             settled_cash_inr=settled_cash,
             open_positions=open_positions,
             kill_switch_active=bool(kill_state.get("active")),
+            symbols_with_oco=set(oco_map.keys()),
         )
 
         actions, new_registry, decision_rows = run_daily_strategy_iteration(
@@ -190,6 +222,20 @@ class LiveRunner:
         )
         exec_report = executor.apply_planned_actions(session_date, actions)
 
+        fills_today = [
+            {
+                "symbol": f.symbol,
+                "transaction_type": f.transaction_type,
+                "quantity": f.quantity,
+                "price": f.price,
+            }
+            for f in recon.snapshot.fills_today
+        ]
+        if fills_today:
+            sync = self.repo.get_system_state("broker_sync") or {}
+            sync["fills_today"] = fills_today
+            self.repo.set_system_state("broker_sync", sync)
+
         return LiveRunReport(
             session_date=session_date,
             reconciliation_synced=recon.is_synced,
@@ -199,19 +245,37 @@ class LiveRunner:
             actions_executed=len([r for r in exec_report.results if r.success]),
             execution_failures=len(exec_report.failures),
             kill_switch_active=bool(kill_state.get("active")),
+            fills_today=fills_today,
         )
 
-    def _ensure_token(self) -> str:
-        env_token = os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip()
-        if env_token and not self.force_login:
-            return env_token
+    def refresh_upstox_token(self, *, force: bool = False) -> str:
+        """OAuth refresh only — used by morning cron and `scripts/upstox_login.py`."""
+        return self._ensure_token(force=force)
 
-        record = self._token_store.load()
-        if record and self._token_store.is_valid_for_today(record) and not self.force_login:
+    def _ensure_token(self, *, force: bool | None = None) -> str:
+        force_login = self.force_login if force is None else force
+        strategy = self.config.system.auth.token_refresh_strategy
+        automated = strategy == "totp_automated_login"
+
+        if not automated:
+            env_token = os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip()
+            if env_token and not force_login:
+                return env_token
+
+        record = self._token_store.load_from_file()
+        if record and self._token_store.is_valid_for_today(record) and not force_login:
             return record.access_token
 
         if os.environ.get("UPSTOX_API_KEY", "").strip():
-            return self._login.ensure_access_token(force_login=self.force_login)
+            if automated and not os.environ.get("UPSTOX_TOTP_SECRET", "").strip():
+                raise RuntimeError(
+                    "totp_automated_login requires UPSTOX_TOTP_SECRET in .env "
+                    "(remove UPSTOX_ACCESS_TOKEN so tokens refresh from file)"
+                )
+            return self._login.ensure_access_token(force_login=force_login)
+
+        if self.live.mock_broker:
+            return ""
 
         if self.live.paper_mode:
             logger.warning(
@@ -233,7 +297,7 @@ class LiveRunner:
         return out
 
     def _load_bars(self, universe: list[str], end: date) -> dict:
-        days = self.config.darvas_box.required_price_history_days + 50
+        days = darvas_price_history_days(self.config)
         symbols = self.data_lake.filter_symbols_with_bar_on(universe, end)
         return {s: self.data_lake.get_daily_bars(s, end, days) for s in symbols}
 
@@ -275,15 +339,12 @@ class LiveRunner:
         trading_days = self.data_lake.get_trading_days(self.live.warmup_from, pricing_date)
         if not trading_days:
             return
-        if session_date > pricing_date:
-            warm_end = pricing_date
+        strategy_date = pricing_date if session_date > pricing_date else session_date
+        if trading_days[-1] == strategy_date and len(trading_days) > 1:
+            warm_end = trading_days[-2]
         else:
-            warm_end = (
-                trading_days[-2]
-                if trading_days[-1] == pricing_date and len(trading_days) > 1
-                else trading_days[-1]
-            )
-        if warm_end >= session_date and session_date <= pricing_date and not self.force_warmup:
+            warm_end = trading_days[-1]
+        if warm_end >= strategy_date and not self.force_warmup:
             return
 
         from src.live.warmup_cache import (
@@ -303,6 +364,8 @@ class LiveRunner:
             )
             if cached:
                 registry, blocked = cached
+                if self.live.mock_broker or self.live.override_broker_capital:
+                    blocked = set()
                 self.repo.upsert_state_registry(registry)
                 self.repo.set_system_state(
                     "breakout_reentry_blocked",
@@ -327,6 +390,9 @@ class LiveRunner:
         registry = bt.repo.get_state_registry()
         self.repo.upsert_state_registry(registry)
         blocked = set(bt._breakout_reentry_blocked)
+        if self.live.mock_broker or self.live.override_broker_capital:
+            blocked = set()
+            logger.info("Fresh live book — cleared warmup re-entry blocks")
         self.repo.set_system_state(
             "breakout_reentry_blocked",
             {"symbols": sorted(blocked)},

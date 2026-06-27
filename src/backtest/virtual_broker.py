@@ -1,4 +1,4 @@
-"""GTT fill simulation — REQUIREMENTS v1.2 Section 8."""
+"""GTT fill simulation â€” REQUIREMENTS v1.2 Section 8."""
 
 from __future__ import annotations
 

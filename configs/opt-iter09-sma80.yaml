@@ -1,6 +1,6 @@
-# Optimization iter 9: zoom_sma80_reset_loose_4.0 (best — also default config.yaml)
-# 2Y backtest (2024-06-01 -> 2026-06-19): CAGR 21.62%, max DD 1.62%, 236 trades
-# Usage: python scripts/run_backtest.py --config configs/opt-iter09-sma80.yaml --start 2024-06-01 --end 2026-06-19
+# Optimization iter 9: zoom_sma80_reset_loose_4.0 — archived.
+# Use configs/baseline-next-best.yaml for the preserved next-best baseline (min_box_duration_days: 5).
+# Default production config is config.yaml (optimal, min_box_duration_days: 4).
 
 system:
   mode: discretionary

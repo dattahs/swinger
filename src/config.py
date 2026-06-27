@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
@@ -21,7 +24,7 @@ class AuthConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    live_backend: str = "dynamodb"
+    live_backend: str = "sqlite"
     backtest_backend: str = "sqlite"
 
 
@@ -59,6 +62,7 @@ class BacktestConfig(BaseModel):
     simulation_slippage_pct: float = 0.05
     execution_environment: str = "local"
     data_db_path: str = "./data/processed/swinger_data.db"
+    send_email_on_complete: bool = True
     progress_log: ProgressLogConfig = Field(default_factory=ProgressLogConfig)
     debug_log: DebugLogConfig = Field(default_factory=DebugLogConfig)
 
@@ -130,14 +134,151 @@ class DarvasBoxConfig(BaseModel):
     darvas_reversal_days: int = 3
     atr_period: int = 20
     atr_multiplier: float = 2.0
-    min_box_duration_days: int = 5
+    min_box_duration_days: int = 4
     max_box_duration_days: int = 30
     min_box_height_pct: float = 3.0
     max_box_height_pct: float = 20.0
     breakout_volume_multiplier: float = 1.5
+    breakout_volume_sma_period: int = 20
     required_price_history_days: int = 280
+    price_history_buffer_days: int = 50
     breakout_reset_above_top_pct: float = 2.0
     market_trend_filter: MarketTrendFilter = Field(default_factory=MarketTrendFilter)
+
+
+@dataclass(frozen=True)
+class DarvasTuningParam:
+    """One tunable knob in the Darvas scan → entry → trail pipeline."""
+
+    key: str
+    path: str
+    group: Literal["box", "universe", "entry", "trail", "ranking"]
+    description: str = ""
+
+
+# Short keys map to dot-paths on AppConfig — use with darvas_algo_snapshot / apply_darvas_algo_overrides.
+DARVAS_ALGO_TUNING_PARAMS: tuple[DarvasTuningParam, ...] = (
+    DarvasTuningParam("darvas_reversal_days", "darvas_box.darvas_reversal_days", "box"),
+    DarvasTuningParam("atr_period", "darvas_box.atr_period", "box"),
+    DarvasTuningParam("atr_multiplier", "darvas_box.atr_multiplier", "box"),
+    DarvasTuningParam("min_box_duration_days", "darvas_box.min_box_duration_days", "box"),
+    DarvasTuningParam("max_box_duration_days", "darvas_box.max_box_duration_days", "box"),
+    DarvasTuningParam("min_box_height_pct", "darvas_box.min_box_height_pct", "box"),
+    DarvasTuningParam("max_box_height_pct", "darvas_box.max_box_height_pct", "box"),
+    DarvasTuningParam("breakout_volume_multiplier", "darvas_box.breakout_volume_multiplier", "box"),
+    DarvasTuningParam("breakout_volume_sma_period", "darvas_box.breakout_volume_sma_period", "box"),
+    DarvasTuningParam(
+        "breakout_reset_above_top_pct", "darvas_box.breakout_reset_above_top_pct", "box"
+    ),
+    DarvasTuningParam(
+        "required_price_history_days", "darvas_box.required_price_history_days", "box"
+    ),
+    DarvasTuningParam(
+        "price_history_buffer_days", "darvas_box.price_history_buffer_days", "box"
+    ),
+    DarvasTuningParam("trend_mode", "darvas_box.market_trend_filter.mode", "box"),
+    DarvasTuningParam("trend_index", "darvas_box.market_trend_filter.index", "box"),
+    DarvasTuningParam(
+        "trend_moving_averages", "darvas_box.market_trend_filter.moving_averages", "box"
+    ),
+    DarvasTuningParam(
+        "allow_sector_trend_override",
+        "darvas_box.market_trend_filter.allow_sector_trend_override",
+        "box",
+    ),
+    DarvasTuningParam("require_new_52wk_high", "universe_filters.require_new_52wk_high", "universe"),
+    DarvasTuningParam(
+        "new_high_lookback_weeks", "universe_filters.new_high_lookback_weeks", "universe"
+    ),
+    DarvasTuningParam(
+        "lookback_years_for_52wk_high",
+        "universe_filters.lookback_years_for_52wk_high",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_lookback_enabled",
+        "universe_filters.adaptive_new_high_lookback.enabled",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_regime_index",
+        "universe_filters.adaptive_new_high_lookback.regime_index",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_sma_period",
+        "universe_filters.adaptive_new_high_lookback.sma_period",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_min_lookback_weeks",
+        "universe_filters.adaptive_new_high_lookback.min_lookback_weeks",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_max_lookback_weeks",
+        "universe_filters.adaptive_new_high_lookback.max_lookback_weeks",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_low_percentile",
+        "universe_filters.adaptive_new_high_lookback.low_percentile",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_high_percentile",
+        "universe_filters.adaptive_new_high_lookback.high_percentile",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "adaptive_spread_jump_threshold_pct",
+        "universe_filters.adaptive_new_high_lookback.spread_jump_threshold_pct",
+        "universe",
+    ),
+    DarvasTuningParam(
+        "gtt_trigger_buffer_inr", "risk_management.gtt_trigger_buffer_inr", "entry"
+    ),
+    DarvasTuningParam(
+        "stop_loss_buffer_fraction_inr",
+        "risk_management.stop_loss_buffer_fraction_inr",
+        "entry",
+    ),
+    DarvasTuningParam(
+        "min_structural_r_ratio", "risk_management.min_structural_r_ratio", "entry"
+    ),
+    DarvasTuningParam(
+        "require_box_reset_for_reentry",
+        "risk_management.require_box_reset_for_reentry",
+        "entry",
+    ),
+    DarvasTuningParam(
+        "entry_require_close_above_sma",
+        "risk_management.entry_require_close_above_sma",
+        "entry",
+    ),
+    DarvasTuningParam("entry_sma_period", "risk_management.entry_sma_period", "entry"),
+    DarvasTuningParam(
+        "entry_post_breakout_consecutive_red_high_vol",
+        "risk_management.entry_post_breakout_consecutive_red_high_vol",
+        "entry",
+    ),
+    DarvasTuningParam("max_hold_sessions", "risk_management.max_hold_sessions", "trail"),
+    DarvasTuningParam(
+        "stale_box_tsl_daily_pct", "risk_management.stale_box_tsl_daily_pct", "trail"
+    ),
+    DarvasTuningParam("box_same_tolerance_pct", "risk_management.box_same_tolerance_pct", "trail"),
+    DarvasTuningParam("trail_min_ratchet_inr", "trailing_stop.min_ratchet_inr", "trail"),
+    DarvasTuningParam("trail_max_risk_pct", "trailing_stop.max_trail_risk_pct", "trail"),
+    DarvasTuningParam(
+        "sector_rs_lookback_days", "candidate_ranking.sector_rs_lookback_days", "ranking"
+    ),
+)
+
+DARVAS_ALGO_PARAM_PATHS: dict[str, str] = {p.key: p.path for p in DARVAS_ALGO_TUNING_PARAMS}
+
+# Repo-relative paths for canonical strategy configs.
+DEFAULT_CONFIG_PATH = "config.yaml"
+BASELINE_NEXT_BEST_CONFIG_PATH = "configs/baseline-next-best.yaml"
 
 
 class RiskManagementConfig(BaseModel):
@@ -199,7 +340,9 @@ class LiveConfig(BaseModel):
     browser_profile_dir: str = "./data/.upstox_browser"
     adopt_broker_truth: bool = True
     allow_drift: bool = False
+    mock_broker: bool = False
     initial_capital_inr: float = 500_000.0
+    override_broker_capital: bool = False
     warmup_state: bool = True
     warmup_from: date = date(2025, 10, 1)
     warmup_cache_dir: str = "./data/live/warmup_cache"
@@ -228,8 +371,10 @@ class AppConfig(BaseModel):
         if self.fundamental_filters.source != "nse_official_xbrl_pit":
             raise ValueError("fundamental_filters.source must be nse_official_xbrl_pit")
         live = self.system.storage.live_backend.lower()
-        if live in ("sqlite", "s3"):
-            raise ValueError("live_backend must be dynamodb, not sqlite/s3")
+        if live == "s3":
+            raise ValueError("live_backend s3 is not supported — use sqlite on VPS")
+        if live not in ("sqlite", "dynamodb"):
+            raise ValueError("live_backend must be sqlite (v1 VPS) or dynamodb (v2)")
         return self
 
 
@@ -260,6 +405,48 @@ def load_config(path: str | Path, *, validate_auth: bool = True) -> AppConfig:
     if not validate_auth:
         return cfg
     return cfg
+
+
+def _config_get(cfg: AppConfig, path: str) -> Any:
+    obj: Any = cfg
+    for part in path.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
+def _config_set(cfg: AppConfig, path: str, value: Any) -> None:
+    parts = path.split(".")
+    obj: Any = cfg
+    for part in parts[:-1]:
+        obj = getattr(obj, part)
+    setattr(obj, parts[-1], value)
+
+
+def darvas_price_history_days(cfg: AppConfig) -> int:
+    """Bars to load for Darvas / ATR warmup (required history + buffer)."""
+    d = cfg.darvas_box
+    return d.required_price_history_days + d.price_history_buffer_days
+
+
+def darvas_algo_snapshot(cfg: AppConfig) -> dict[str, Any]:
+    """Flatten all Darvas-algo tuning knobs using short keys."""
+    return {key: _config_get(cfg, path) for key, path in DARVAS_ALGO_PARAM_PATHS.items()}
+
+
+def apply_darvas_algo_overrides(cfg: AppConfig, overrides: dict[str, Any]) -> AppConfig:
+    """Return a copy of cfg with Darvas tuning overrides (short or dot-path keys)."""
+    cfg = cfg.model_copy(deep=True)
+    for raw_key, value in overrides.items():
+        path = DARVAS_ALGO_PARAM_PATHS.get(raw_key, raw_key)
+        _config_set(cfg, path, value)
+    return cfg
+
+
+def darvas_algo_fingerprint(cfg: AppConfig) -> str:
+    """Hash every field that affects Darvas state during warmup / replay."""
+    payload = darvas_algo_snapshot(cfg)
+    raw = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def load_config_relaxed(path: str | Path) -> AppConfig:

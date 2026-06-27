@@ -19,6 +19,7 @@ class GTTStatus(str, Enum):
 class BrokerFunds:
     available_cash_inr: float
     used_margin_inr: float = 0.0
+    unsettled_proceeds_inr: float = 0.0
     raw: dict = field(default_factory=dict)
 
 
@@ -87,6 +88,7 @@ class ReconciliationResult:
     adopted_broker_truth: bool = False
     pending_symbols: set[str] = field(default_factory=set)
     settled_cash_inr: float = 0.0
+    unsettled_proceeds_inr: float = 0.0
     open_positions_synced: int = 0
 
     @property

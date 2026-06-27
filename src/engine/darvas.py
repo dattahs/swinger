@@ -197,7 +197,8 @@ def update_box_state(
 
     close = float(bars.iloc[-1]["close"])
     vol = int(bars.iloc[-1]["volume"])
-    vol_sma = volume_sma(bars, 20)
+    vol_period = dcfg.breakout_volume_sma_period
+    vol_sma = volume_sma(bars, vol_period)
     state.volume_sma_20 = vol_sma
     state.last_close = close
 

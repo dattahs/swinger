@@ -16,4 +16,12 @@ dist/
 build/
 *credentials*
 *secret*
-*.pem
+deploy-bundles/
+login_timeout*.png
+validation_outputs/
+scripts/deploy/deploy.config.yaml
+scripts/deploy/.last-push.json
+scripts/deploy/vps/.env
+scripts/deploy/vps/config.yaml
+src/agentic-loop/*.log
+src/agentic-loop/*-log.jsonl

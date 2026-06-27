@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from src.config import darvas_price_history_days
 from src.data.sector_etfs import SECTOR_INDEX_SYMBOLS, scan_universe_extras
 
 if TYPE_CHECKING:
@@ -53,7 +54,7 @@ class BacktestDataCache:
         self._earnings: dict[str, list[date]] = {}
         self._membership: list[str] = []
         self._extras: list[str] = list(scan_universe_extras())
-        self._history_days: int = config.darvas_box.required_price_history_days + 50
+        self._history_days: int = darvas_price_history_days(config)
         self._warmed = False
 
     def warm(self, start: date, end: date) -> None:

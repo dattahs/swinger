@@ -1,4 +1,4 @@
-"""DynamoDB repository for production live runs — REQUIREMENTS v1.2 Section 5."""
+"""DynamoDB repository — DEFERRED (v2). v1 live uses SqliteLiveRepository on VPS."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from src.repository.base import Repository
 
 
 class DynamoDBRepository(Repository):
-    """Production persistence (Lambda). Implement when deploying to AWS."""
+    """Deferred v2 cloud persistence. v1 uses SqliteLiveRepository on VPS."""
 
     def __init__(self, table_prefix: str = "swinger") -> None:
         self.table_prefix = table_prefix

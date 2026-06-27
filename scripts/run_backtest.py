@@ -41,6 +41,11 @@ def main() -> None:
         action="store_true",
         help="Enable R-managed runner (breakeven floor, box ratchet, 5R target cap)",
     )
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="Skip completion email (overrides config backtest.send_email_on_complete)",
+    )
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -56,6 +61,8 @@ def main() -> None:
         cfg.backtest.progress_log.enabled = False
     if args.enable_r_managed_runner:
         cfg.r_managed_runner.enabled = True
+    if args.no_email:
+        cfg.backtest.send_email_on_complete = False
 
     if args.seed_demo:
         from src.data.seed import seed_demo_data

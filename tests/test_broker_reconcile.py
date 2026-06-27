@@ -92,7 +92,56 @@ def test_reconcile_buy_fill_clears_pending(repo):
     reconcile_broker_state(date(2026, 6, 19), MockBroker(snap), repo)
     pending = repo.get_system_state("pending_gtts")
     assert "RELIANCE" not in pending
-    assert len(repo.get_open_positions()) == 1
+    positions = repo.get_open_positions()
+    assert len(positions) == 1
+    assert positions[0].current_stop_loss == 2400.0
+    assert positions[0].current_target == 2600.0
+
+
+def test_reconcile_buy_fill_applies_stop_when_broker_has_position(repo):
+    repo.set_system_state(
+        "pending_gtts",
+        {
+            "RELIANCE": {
+                "gtt_order_id": "GTT-1",
+                "trigger_price": 2500,
+                "stop_loss_price": 2400,
+                "target_price": 2600,
+                "quantity": 5,
+                "placed_date": "2026-06-18",
+            }
+        },
+    )
+    snap = BrokerSnapshot(
+        as_of=datetime.now(timezone.utc),
+        funds=BrokerFunds(available_cash_inr=50_000.0),
+        positions=[BrokerPosition(symbol="RELIANCE", quantity=5, average_price=2505.0)],
+        gtt_orders=[],
+        fills_today=[
+            BrokerFill(
+                symbol="RELIANCE",
+                order_id="O1",
+                trade_id="T1",
+                transaction_type="BUY",
+                quantity=5,
+                price=2505.0,
+            )
+        ],
+    )
+    reconcile_broker_state(date(2026, 6, 19), MockBroker(snap), repo)
+    pos = repo.get_open_positions()[0]
+    assert pos.current_stop_loss == 2400.0
+    assert pos.current_target == 2600.0
+
+
+def test_compute_equity_includes_unsettled():
+    eq = compute_equity(
+        100_000.0,
+        [OpenPosition(symbol="X", quantity=10, entry_price=100, current_stop_loss=90, current_target=120)],
+        {"X": 110.0},
+        unsettled_proceeds_inr=25_000.0,
+    )
+    assert eq == 126_100.0
 
 
 def test_compute_equity():

@@ -1,7 +1,7 @@
 # Swinger v1 — Build Requirements
 
 **Product:** Darvas Box swing-trading system for NSE CASH segment — daily EOD strategy, GTT orders via broker API (Upstox or Zerodha Kite), NIFTY 500 universe.  
-**Version:** 1.2 | **Date:** 2026-06-19  
+**Version:** 1.3 | **Date:** 2026-06-25  
 **Scope:** MVP v1 only. Items marked **(v2)** are out of scope.
 
 **Document authority:** This file is the **single source of truth** for implementation. `PRD_Darvas_Trading_v4.md` is retained as decision history and commentary. `PRD_Darvas_Trading_v5.md` and `PRD_Darvas_Trading_v6.md` are condensed product sketches — where they diverge from this file, **Section 0** records the binding resolution. `BACKTEST_PLAN_Darvas_Trading_v1.md` is the data-ingest runbook companion for Section 8 and Section 12. **`IMPLEMENTATION_PLAN_Backtest.md`** is the step-by-step laptop build guide for modules M1–M5.
@@ -15,7 +15,8 @@ Condensed PRDs v5 and v6 reintroduce several v3.0 fields that conflict with v4.3
 | Topic | PRD v5/v6 | Binding decision (this file) | Rationale |
 |---|---|---|---|
 | **Live broker** | Upstox (v6); Upstox/Kite (v5) | **`upstox` is the default**; `zerodha_kite` optional — pluggable GTT client behind `src/broker/` | Confirmed product-owner default (v6) |
-| **Live persistence** | SQLite file on S3/EFS, pull/push each Lambda run | **DynamoDB** for live; **SQLite** for backtest only | v4 §11 — S3 has no row locking; retry mid-write risks corruption |
+| **Live deployment** | AWS Lambda + EventBridge cron (v4/v5/v6) | **Single VPS** — `scripts/run_live.py` via cron/systemd at 16:30 IST | Product-owner decision 2026-06-25 — simpler ops; no cold starts or container packaging |
+| **Live persistence** | SQLite on S3/EFS (v6); DynamoDB (v1.2) | **SQLite on VPS** (`live.local_db_path`); **separate** from backtest data lake | Single-writer host with local disk — no S3 pull/push; DynamoDB deferred to v2 |
 | **Fundamentals (backtest + live screens)** | `fundamental_filters.source: broker_api` | **`nse_official_xbrl_pit`** warehouse with `effective_date` discipline | Broker APIs expose current snapshots; PIT join is mandatory for 2018–2026 backtest |
 | **Fundamentals (live validation)** | Broker API implied as primary | Optional **cross-check** via broker quote API after PIT join; never replace PIT as primary | Parity with backtest decision log |
 | **Universe lookback** | `lookback_years_for_doubling: 2` | **`lookback_years_for_52wk_high: 1`** + **`require_new_52wk_high: true`** for `SCANNING → FORMING` | Darvas precondition is new 52-week high (~252 sessions), not a 2-year doubling rule; v5/v6 field is deprecated |
@@ -29,7 +30,7 @@ Condensed PRDs v5 and v6 reintroduce several v3.0 fields that conflict with v4.3
 | **Backtest module** | Not specified (advisor only on-demand) | **`backtester.py` + `virtual_broker.py`** on local machine — never Lambda (Section 8) | v4 §3.2 |
 | **Advisor** | LLM-generated optimization proposals | **v1:** deterministic JSON (sector/duration/sensitivity grid); **(v2):** optional LLM narrative layer | Avoid autonomous config mutation; v4 §13 |
 | **`system_logs` table** | Present in v5/v6 schema | **Live:** required append-only audit log; **Backtest:** optional (decision_log is primary) | v5/v6 schema adopted for live |
-| **Lambda NFRs** | ≤180 s runtime, ≤512 MB RAM | **Live Lambda:** must complete Steps 9.1–9.9 within **180 s** and **512 MB** | v5/v6 §7 adopted for live path only; backtest target remains Section 8 |
+| **Live run NFRs** | Lambda ≤180 s, ≤512 MB RAM (v5/v6 §7) | **VPS:** complete Steps 9.1–9.9 within **15 minutes**; cron must not overlap (flock or `systemd` timer) | No Lambda ceiling; warmup backtest may run on first deploy |
 | **Auth / modes** | Not specified | **`discretionary` ↔ `manual_daily_login`**, **`fully_automated` ↔ `totp_automated_login`** (Section 14) | v4 §5 — both modes auto-place GTTs once token valid |
 | **Market trend filter** | Top-level `market_trend_filter` in v5/v6 | Nested under **`darvas_box.market_trend_filter`** in config (Section 13) | Structural preference only; semantics unchanged |
 
@@ -42,12 +43,12 @@ Condensed PRDs v5 and v6 reintroduce several v3.0 fields that conflict with v4.3
 | Daily run at 16:30 IST (live + backtest) | Intraday polling / kill-switch mid-session |
 | Darvas box + fundamental pre-filter | `ALL_NSE` universe |
 | Backtest 2018-01-01 → 2026-05-31, ₹5L | Web dashboard |
-| Live Lambda + DynamoDB (not SQLite-on-S3) | Per-trade approve/reject UI |
+| Live VPS + local SQLite (`scripts/run_live.py`) | Per-trade approve/reject UI |
 | Broker: Upstox (default) or Zerodha Kite | |
 | Structural R ≥ 1:3 entry filter | |
 | TRAIL_OCO 10% risk gate on open positions | |
 | Paper-trading logging mode | `expected_r` ranking from ML buckets |
-| Telegram notifications | Aurora Postgres (use DynamoDB) |
+| Telegram notifications | AWS Lambda / DynamoDB / Aurora (v2 cloud path) |
 
 **Strategy name:** Darvas Box entries with Minervini-style fundamental quality pre-filter (fundamentals do not affect box math).
 
@@ -65,7 +66,8 @@ Swinger/
 │   ├── repository/
 │   │   ├── base.py            # Abstract repository — Section 5
 │   │   ├── sqlite.py          # Backtest backend
-│   │   └── dynamodb.py        # Live backend
+│   │   ├── sqlite_live.py     # Live VPS backend (default)
+│   │   └── dynamodb.py        # (v2) optional cloud backend
 │   ├── engine/
 │   │   ├── filters.py         # Universe + fundamental screens
 │   │   ├── darvas.py          # Box state machine — Section 6
@@ -89,14 +91,16 @@ Swinger/
 │   │   ├── upstox.py          # Default live broker (PRD v6)
 │   │   └── kite.py            # Alternative: Zerodha Kite Connect
 │   ├── live/
-│   │   └── lambda_handler.py  # Daily 16:30 orchestration — Section 9
+│   │   ├── runner.py          # Daily 16:30 orchestration — Section 9
+│   │   └── warmup_cache.py    # Darvas state warmup cache
 │   ├── notify/
 │   │   └── telegram.py        # Section 10
 │   └── advisor/
 │       └── advisor.py         # Read-only JSON report — Section 11
 ├── scripts/
 │   ├── ingest_all.py
-│   └── run_backtest.py
+│   ├── run_backtest.py
+│   └── run_live.py            # VPS cron entrypoint — Section 9
 ├── tests/
 │   ├── test_darvas.py
 │   ├── test_risk.py
@@ -121,7 +125,7 @@ Swinger/
         ↓
 [M6] broker/auth + GTT client (upstox default)
         ↓
-[M7] live lambda_handler + dynamodb repo
+[M7] live runner + sqlite_live repo
         ↓
 [M8] telegram notify
         ↓
@@ -136,7 +140,7 @@ Swinger/
 | **M4** `engine/*` | `run_daily_strategy_iteration()` | M1, M2 (interface) |
 | **M5** `backtester.py`, `virtual_broker.py` | CLI backtest + CSV outputs | M2, M3, M4 |
 | **M6** `broker/*` | Upstox/Kite GTT + auth | M1 |
-| **M7** `lambda_handler.py`, `dynamodb.py` | EventBridge daily live run | M2, M4, M6 |
+| **M7** `live/runner.py`, `sqlite_live.py`, `scripts/run_live.py` | VPS cron daily live run | M2, M4, M6 |
 | **M8** `telegram.py` | Alerts + digests | M1 |
 | **M9** `advisor.py` | Advisory JSON | M2 |
 
@@ -270,13 +274,14 @@ class Repository(ABC):
 |---|---|
 | log_id | INTEGER PK AUTOINCREMENT |
 | timestamp | DATETIME |
-| module | TEXT — e.g. `GTT_ORCHESTRATOR`, `LAMBDA_MAIN` |
+| module | TEXT — e.g. `GTT_ORCHESTRATOR`, `LIVE_RUNNER` |
 | level | TEXT — `INFO`, `ERROR`, `SIGNAL` |
 | symbol | TEXT nullable |
 | payload | TEXT — JSON context |
 
-- Live: DynamoDB (`symbol` / `trade_id` keys) + `system_logs` via repository or CloudWatch export.
-- Backtest: SQLite per run.
+- Live: SQLite on VPS via `SqliteLiveRepository` (`live.local_db_path`); append `system_logs` to same DB or rotated log files.
+- Backtest: SQLite per run / shared data lake (`backtest.data_db_path`).
+- **(v2)** `DynamoDBRepository` if migrating off VPS.
 
 ---
 
@@ -383,7 +388,7 @@ Risk_pct         = 100 * risk_at_stop_inr / account_equity
 
 **Note:** `Risk_pct` uses `entry_price` from `trade_ledger` and **proposed** `new_stop`, not the pre-ratchet stop. Trailing up reduces `risk_at_stop_inr`, so the gate typically clears once the box has tightened sufficiently; it blocks ratchet in edge cases (equity drawdown, manual qty changes, corporate actions) where proposed stop still implies >10% equity at risk.
 
-### Kill switch (EOD only — evaluated in `lambda_handler`, not `engine`)
+### Kill switch (EOD only — evaluated in `LiveRunner.run()`, not `engine`)
 ```
 daily_loss_inr = max(0, equity_yesterday_close - equity_today_close)
 if daily_loss_inr >= kill_switch_daily_loss_limit_inr:
@@ -405,8 +410,8 @@ Default action: `halt_new_entries` (existing OCOs unchanged).
 2. `run_daily_strategy_iteration(context_T, ...)`
 3. `virtual_broker` reconciles pending GTTs:
    - Buy fill: `high >= trigger` → fill at `trigger * (1 + slippage)`
-   - Stop: `low <= stop` → exit at `stop * (1 - slippage)` (conservative: stop before target if both hit)
-   - Target: `high >= target` → exit at `target * (1 - slippage)`
+   - Stop: `low <= stop` → exit at `stop * (1 - slippage)` from entry session onward (stop before target if both hit)
+   - Target: `high >= target` → exit at `target * (1 - slippage)` from **T+1** only (not on entry fill day — daily-bar conservatism; live OCO activates both legs on fill)
    - T+1: sale proceeds available T+2
 4. Update equity, `system_state`, write `decision_log` row per symbol
 
@@ -422,15 +427,23 @@ Default action: `halt_new_entries` (existing OCOs unchanged).
 
 ---
 
-## 9. Live execution (`live/lambda_handler.py`)
+## 9. Live execution (`live/runner.py`, `scripts/run_live.py`)
 
-**Trigger:** EventBridge cron 16:30 IST Mon–Fri (skip NSE holidays).
+**Trigger:** VPS cron or `systemd` timer at **16:30 IST** Mon–Fri (skip NSE holidays). Example cron:
 
-**Non-functional (PRD v5/v6 §7):** entire pipeline must finish within **180 seconds** and **512 MB** RAM.
+```
+30 16 * * 1-5 cd /opt/swinger && flock -n /tmp/swinger-live.lock python scripts/run_live.py >> logs/live.log 2>&1
+```
+
+For `fully_automated` mode, schedule `totp_automated_login` at ~**08:45 IST** (separate cron) so the access token is valid before the close run.
+
+**Non-functional:** entire pipeline must finish within **15 minutes** on a 2-vCPU / 4 GB VPS. Use `flock` or `systemd` `OnUnitActiveSec` so a slow run cannot overlap the next day's invocation.
+
+**CLI:** `python scripts/run_live.py --config config.yaml` (flags: `--login`, `--date`, `--no-warmup`, `--force-warmup`)
 
 **Sequence:**
 1. Validate config mode ↔ auth strategy binding
-2. Refresh token (`manual_daily_login` check or `totp_automated_login` at ~08:45)
+2. Refresh token (`manual_daily_login` check or pre-market `totp_automated_login`)
 3. Apply corporate-action adjustments for open positions (split/bonus from data provider)
 4. Reconcile broker positions → `trade_ledger`
 5. Compute equity at close; evaluate kill switch; persist `system_state`
@@ -438,7 +451,7 @@ Default action: `halt_new_entries` (existing OCOs unchanged).
 7. `run_daily_strategy_iteration()` → new `PLACE_BUY_GTT`
 8. Execute broker GTT actions via configured provider (retry transient errors ×3, exponential backoff)
 9. Write `system_logs`; Telegram digest + alerts
-10. Persist state to DynamoDB (transactional)
+10. Persist state to local SQLite (`live.local_db_path`)
 
 **GTT reconciliation (PRD v5/v6 Cases A–D):**
 | Case | Condition | Action |
@@ -448,24 +461,29 @@ Default action: `halt_new_entries` (existing OCOs unchanged).
 | C | Entry GTT filled today | `ESTABLISH_OCO` with stop/target |
 | D | `box_bottom` ratcheted up **and** `Risk_pct ≤ max_trail_risk_pct` (Section 7) | `TRAIL_OCO` |
 
-**AWS:**
-- Lambda container image (ECR); pandas/numpy inside image
-- VPC + NAT Gateway + Elastic IP (register IP in broker developer console whitelist)
-- Secrets Manager: API key, secret, access token, TOTP secret, Telegram token
-- Idempotency key on every order action
-- CloudWatch → SNS → email + Telegram on failure
+**VPS deployment:**
+- Single Linux VPS (Ubuntu 22.04+ or Debian 12+) with **static public IP** — register IP in broker developer console whitelist
+- App checkout at e.g. `/opt/swinger`; Python venv; `requirements.txt` + `requirements-live.txt`
+- Secrets in `.env` on the host (API key, secret, TOTP secret, Telegram token) — restrict file permissions (`chmod 600`)
+- Bhavcopy ingest: cron ~17:00 IST after NSE publishes; live run depends on fresh EOD bars
+- Optional: `systemd` units for `swinger-live.service` and `swinger-ingest.service`
+- Log rotation via `journald` or `logrotate` on `logs/live.log`
+- Idempotency key on every order action (same as v4)
+- Telegram + email on failure (no CloudWatch/SNS required)
 
 **Broker errors:**
 - Transient (5xx, 429, timeout): retry ×3
 - Persistent: log + alert; do not mark placed
 - `ESTABLISH_OCO` fail after fill: `oco_pending_review=true` + alert
 - Missing symbol data: skip symbol, continue run
-- DB failure: abort + alert
+- DB failure: abort + alert (SQLite WAL mode recommended)
 
 **Compliance:**
-- Static IP required for broker order APIs (SEBI retail algo framework)
+- Static IP required for broker order APIs (SEBI retail algo framework) — native on VPS; no NAT Gateway needed
 - Never emit MARKET orders without `market_protection`
 - GTT legs use explicit limit/trigger prices only
+
+**(v2 / deprecated)** `live/lambda_handler.py` and `repository/dynamodb.py` — retained as stubs only; do not deploy to AWS Lambda for v1.
 
 ---
 
@@ -476,7 +494,7 @@ Default action: `halt_new_entries` (existing OCOs unchanged).
 | Morning broker login link | Yes | No |
 | Post-16:30 action digest | Yes | Yes |
 | Kill switch trip | Yes | Yes |
-| Lambda / broker error | Yes | Yes |
+| Live run / broker error | Yes | Yes |
 | Missing / expired token | Yes | Yes |
 
 ---
@@ -530,11 +548,11 @@ system:
     access_token_secret_arn: ""
     totp_secret_arn: ""
   storage:
-    live_backend: dynamodb      # NOT sqlite-on-s3 — see Section 0
+    live_backend: sqlite         # sqlite on VPS — see Section 0; dynamodb is v2
     backtest_backend: sqlite
   networking:
     static_ip_required: true
-    nat_gateway_elastic_ip: ""
+    vps_public_ip: ""            # register in broker developer console whitelist
   notifications:
     telegram_bot_token_secret_arn: ""
     telegram_chat_id: ""
@@ -616,7 +634,7 @@ candidate_ranking:
 - Reject startup on mismatch
 - `system.broker.provider` defaults to **`upstox`** when omitted
 - `fundamental_filters.source` must be `nse_official_xbrl_pit` when `backtest` block is present
-- `system.storage.live_backend` must not be `sqlite` or `s3` (use `dynamodb`)
+- `system.storage.live_backend` must be `sqlite` for v1 VPS (`dynamodb` reserved for v2); reject `s3`
 - Reject deprecated key `lookback_years_for_doubling` — use `lookback_years_for_52wk_high`
 
 ---
@@ -659,7 +677,7 @@ Both modes auto-place GTTs. No per-trade approval in v1.
 1. All Section 15 tests pass
 2. Backtest completes on 2018–2026 window
 3. Paper-trading 4–6 weeks (log or place+cancel GTTs)
-4. NAT Elastic IP registered in broker developer console IP whitelist
+4. VPS public IP registered in broker developer console IP whitelist
 5. Live capital starts below backtest capital; scale after months of parity
 
 ---
@@ -684,18 +702,19 @@ flowchart TB
         VB --> CSV[decision_log + trade_ledger]
     end
 
-    subgraph live [M7 Live]
-        EB[EventBridge 16:30] --> LH[lambda_handler.py]
-        LH --> BROKER[Broker GTT API]
-        LH --> DDB[(DynamoDB)]
+    subgraph live [M7 Live VPS]
+        CRON[cron 16:30 IST] --> RUN[run_live.py]
+        RUN --> LR[LiveRunner]
+        LR --> BROKER[Broker GTT API]
+        LR --> LDB[(SQLite live DB)]
     end
 
     DB --> ENG
     PIT --> ENG
     ENG --> BT
-    ENG --> LH
-    LH --> TG[Telegram M8]
-    DDB --> ADV[advisor M9]
+    ENG --> LR
+    LR --> TG[Telegram M8]
+    LDB --> ADV[advisor M9]
     CSV --> ADV
 ```
 
@@ -705,21 +724,21 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant EB as EventBridge
-    participant L as lambda_handler
+    participant CR as cron/systemd
+    participant R as LiveRunner
     participant B as Broker API
     participant E as engine
-    participant R as Repository
+    participant DB as SQLite live DB
     participant T as Telegram
 
-    EB->>L: 16:30 IST
-    L->>L: validate token
-    L->>B: get positions / holdings
-    L->>R: reconcile trade_ledger
-    L->>R: equity snapshot + kill switch
-    L->>E: run_daily_strategy_iteration
-    E-->>L: actions + decision log
-    L->>B: TRAIL_OCO / PLACE_BUY_GTT
-    L->>R: persist state
-    L->>T: digest + alerts
+    CR->>R: 16:30 IST run_live.py
+    R->>R: validate token
+    R->>B: get positions / holdings
+    R->>DB: reconcile trade_ledger
+    R->>DB: equity snapshot + kill switch
+    R->>E: run_daily_strategy_iteration
+    E-->>R: actions + decision log
+    R->>B: TRAIL_OCO / PLACE_BUY_GTT
+    R->>DB: persist state
+    R->>T: digest + alerts
 ```

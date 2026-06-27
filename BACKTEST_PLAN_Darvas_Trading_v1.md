@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary
 
-This system is **end-of-day (EOD) only**: the live Lambda runs once at 16:30 IST post-close. A faithful backtest therefore needs **daily OHLCV** — not tick or 1-minute bars — plus **point-in-time (PIT) fundamentals** and **historical index membership**. Intraday data is optional and not required for v1 parity with the PRD.
+This system is **end-of-day (EOD) only**: the live VPS cron runs once at 16:30 IST post-close. A faithful backtest therefore needs **daily OHLCV** — not tick or 1-minute bars — plus **point-in-time (PIT) fundamentals** and **historical index membership**. Intraday data is optional and not required for v1 parity with the PRD.
 
 **Recommended data stack:**
 

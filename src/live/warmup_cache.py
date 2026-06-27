@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from datetime import date
 from pathlib import Path
 
-from src.config import AppConfig
+from src.config import AppConfig, darvas_algo_fingerprint
 from src.models import BoxState, BoxStateEnum
 
 logger = logging.getLogger(__name__)
@@ -16,17 +15,7 @@ logger = logging.getLogger(__name__)
 
 def darvas_warmup_fingerprint(cfg: AppConfig) -> str:
     """Hash config fields that affect Darvas state during warmup replay."""
-    payload = {
-        "darvas_box": cfg.darvas_box.model_dump(mode="json"),
-        "require_box_reset_for_reentry": cfg.risk_management.require_box_reset_for_reentry,
-        "require_new_52wk_high": cfg.universe_filters.require_new_52wk_high,
-        "new_high_lookback_weeks": cfg.universe_filters.new_high_lookback_weeks,
-        "adaptive_new_high_lookback": cfg.universe_filters.adaptive_new_high_lookback.model_dump(
-            mode="json"
-        ),
-    }
-    raw = json.dumps(payload, sort_keys=True, default=str)
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return darvas_algo_fingerprint(cfg)
 
 
 def warmup_cache_path(

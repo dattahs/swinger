@@ -1,3 +1,6 @@
+# Swinger default config — optimal (box-shape tuned, Jun 2026).
+# Next-best baseline: configs/baseline-next-best.yaml (min_box_duration_days: 5).
+
 system:
   mode: discretionary
   execution_segment: CASH
@@ -8,11 +11,11 @@ system:
     access_token_secret_arn: ""
     totp_secret_arn: ""
   storage:
-    live_backend: dynamodb
+    live_backend: sqlite
     backtest_backend: sqlite
   networking:
     static_ip_required: true
-    nat_gateway_elastic_ip: ""
+    vps_public_ip: ""
   notifications:
     telegram_bot_token_secret_arn: ""
     telegram_chat_id: ""
@@ -28,6 +31,7 @@ backtest:
   simulation_slippage_pct: 0.05
   execution_environment: local
   data_db_path: "./data/processed/swinger_data.db"
+  send_email_on_complete: true
   progress_log:
     enabled: true
     log_to_console: true
@@ -76,13 +80,15 @@ darvas_box:
   darvas_reversal_days: 3
   atr_period: 20
   atr_multiplier: 2.0
-  min_box_duration_days: 5
+  min_box_duration_days: 4
   max_box_duration_days: 30
   min_box_height_pct: 3.0
   max_box_height_pct: 20.0
   breakout_volume_multiplier: 1.2
+  breakout_volume_sma_period: 20
   breakout_reset_above_top_pct: 4.0
   required_price_history_days: 280
+  price_history_buffer_days: 50
   market_trend_filter:
     mode: sector_index
     index: "NIFTY 50"
