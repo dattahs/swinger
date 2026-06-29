@@ -123,7 +123,14 @@ def _notify_env_lines(env_path: Path) -> str:
         for raw in env_path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if line.startswith(prefixes) and "=" in line and not line.startswith("#"):
-                lines.append(line)
+                key, _, value = line.partition("=")
+                value = value.strip()
+                if " " in value and not (
+                    (value.startswith('"') and value.endswith('"'))
+                    or (value.startswith("'") and value.endswith("'"))
+                ):
+                    value = f'"{value}"'
+                lines.append(f"{key.strip()}={value}")
     return "\n".join(lines) + "\n"
 
 

@@ -134,6 +134,7 @@ class Backtester:
         end = end or self.config.backtest.end_date
         self._run_start = start
         self._run_end = end
+        self.repo.clear_decision_log()
         trading_days = self.data_lake.get_trading_days(start, end)
         if not trading_days:
             raise RuntimeError(
@@ -294,6 +295,7 @@ class Backtester:
                     settled_cash_inr=self.broker.portfolio.settled_cash,
                     open_positions=open_positions,
                     kill_switch_active=bool(kill_state.get("active")),
+                    symbols_with_oco=self.broker.symbols_with_oco(),
                 )
 
                 actions, state_registry, decisions = run_daily_strategy_iteration(

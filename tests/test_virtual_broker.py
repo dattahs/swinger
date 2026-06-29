@@ -32,7 +32,22 @@ def _place_buy(broker: VirtualBroker, session: date, *, trigger: float, stop: fl
     )
 
 
-def test_same_day_stop_allowed_target_deferred():
+def _establish_oco(broker: VirtualBroker, session: date, *, stop: float, target: float) -> None:
+    broker.apply_actions(
+        session,
+        [
+            PlannedGTTAction(
+                symbol="TEST",
+                action_type=ActionType.ESTABLISH_OCO,
+                stop_loss_price=stop,
+                target_price=target,
+                quantity=10,
+            )
+        ],
+    )
+
+
+def test_same_day_stop_deferred_until_next_session():
     broker = VirtualBroker(0.0)
     broker.set_initial_cash(100_000.0)
     fill_day = date(2025, 6, 10)
@@ -42,13 +57,12 @@ def test_same_day_stop_allowed_target_deferred():
         fill_day,
         {"TEST": _bar(open_=100.0, high=101.0, low=94.0, close=96.0)},
     )
+    _establish_oco(broker, fill_day, stop=95.0, target=110.0)
 
-    assert len(events) == 2
+    assert len(events) == 1
     assert events[0].direction == "BUY"
-    assert events[1].direction == "SELL"
-    assert events[1].exit_reason == ExitReason.STOP_LOSS_HIT
-    assert len(broker.portfolio.closed_trades) == 1
-    assert broker.portfolio.closed_trades[0]["exit_reason"] == ExitReason.STOP_LOSS_HIT.value
+    assert "TEST" in broker.portfolio.positions
+    assert not broker.portfolio.closed_trades
 
 
 def test_same_day_target_ignored_position_carried():
@@ -61,6 +75,7 @@ def test_same_day_target_ignored_position_carried():
         fill_day,
         {"TEST": _bar(open_=100.0, high=115.0, low=99.0, close=112.0)},
     )
+    _establish_oco(broker, fill_day, stop=95.0, target=110.0)
 
     assert len(events) == 1
     assert events[0].direction == "BUY"
@@ -79,6 +94,7 @@ def test_target_hits_on_day_after_entry():
         fill_day,
         {"TEST": _bar(open_=100.0, high=115.0, low=99.0, close=112.0)},
     )
+    _establish_oco(broker, fill_day, stop=95.0, target=110.0)
     events = broker.process_session(
         next_day,
         {"TEST": _bar(open_=112.0, high=111.0, low=108.0, close=110.0)},

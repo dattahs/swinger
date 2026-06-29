@@ -463,5 +463,9 @@ class SqliteBacktestRepository(Repository):
         rows = self._conn.execute("SELECT * FROM trade_ledger ORDER BY entry_date").fetchall()
         return [dict(r) for r in rows]
 
+    def clear_decision_log(self) -> None:
+        self._conn.execute("DELETE FROM decision_log")
+        self._conn.commit()
+
     def get_decision_log_df(self) -> pd.DataFrame:
         return pd.read_sql_query("SELECT * FROM decision_log", self._conn)

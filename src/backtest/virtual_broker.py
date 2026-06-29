@@ -1,4 +1,8 @@
-"""GTT fill simulation â€” REQUIREMENTS v1.2 Section 8."""
+"""GTT fill simulation — REQUIREMENTS v1.2 Section 8.
+
+Daily-bar convention: buy GTT fills on trigger day; stop and target are active only
+from the session after entry (matches live ESTABLISH_OCO on fill confirmation).
+"""
 
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ class VirtualBroker:
     def __init__(self, slippage_pct: float) -> None:
         self.slippage = slippage_pct / 100.0
         self.portfolio = VirtualPortfolio(settled_cash=0.0)
+        self._oco_active: set[str] = set()
 
     def set_initial_cash(self, amount: float) -> None:
         self.portfolio.settled_cash = amount
@@ -50,12 +55,19 @@ class VirtualBroker:
                 )
             elif action.action_type == ActionType.CANCEL_BUY_GTT:
                 self.portfolio.pending_buys.pop(action.symbol, None)
+            elif action.action_type == ActionType.ESTABLISH_OCO:
+                pos = self.portfolio.positions.get(action.symbol)
+                if pos:
+                    pos.current_stop_loss = action.stop_loss_price
+                    pos.current_target = action.target_price
+                    self._oco_active.add(action.symbol)
             elif action.action_type == ActionType.TRAIL_OCO:
                 pos = self.portfolio.positions.get(action.symbol)
                 if pos:
                     pos.current_stop_loss = action.stop_loss_price
                     if action.target_price > 0:
                         pos.current_target = action.target_price
+                    self._oco_active.add(action.symbol)
 
     def expire_stale_pending_buys(
         self,
@@ -115,6 +127,7 @@ class VirtualBroker:
                     current_stop_loss=order.stop_loss_price,
                     current_target=order.target_price,
                     initial_stop_loss=order.stop_loss_price,
+                    initial_target=order.target_price,
                     trade_id=trade_id,
                     entry_date=session_date,
                     entry_box_top=order.entry_box_top,
@@ -142,12 +155,14 @@ class VirtualBroker:
                 continue
             low = float(bar["low"])
             high = float(bar["high"])
+            entry_day = pos.entry_date or session_date
+            oco_active = session_date > entry_day and symbol in self._oco_active
             exit_price = None
             exit_reason = None
-            if low <= pos.current_stop_loss:
+            if oco_active and pos.current_stop_loss > 0 and low <= pos.current_stop_loss:
                 exit_price = pos.current_stop_loss * (1 - self.slippage)
                 exit_reason = ExitReason.STOP_LOSS_HIT
-            elif high >= pos.current_target:
+            elif oco_active and pos.current_target > 0 and high >= pos.current_target:
                 exit_price = pos.current_target * (1 - self.slippage)
                 exit_reason = ExitReason.TARGET_HIT
 
@@ -199,6 +214,9 @@ class VirtualBroker:
 
     def pending_symbols(self) -> set[str]:
         return set(self.portfolio.pending_buys.keys())
+
+    def symbols_with_oco(self) -> set[str]:
+        return set(self._oco_active)
 
 
 def count_sessions_waiting(placed_date: date, session_date: date, trading_days: list[date]) -> int:

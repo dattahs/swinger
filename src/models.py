@@ -50,6 +50,7 @@ class OpenPosition(BaseModel):
     current_stop_loss: float
     current_target: float
     initial_stop_loss: float | None = None
+    initial_target: float | None = None
     sector: str = ""
     is_active: bool = True
     trade_id: str = ""

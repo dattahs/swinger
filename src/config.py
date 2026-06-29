@@ -262,6 +262,21 @@ DARVAS_ALGO_TUNING_PARAMS: tuple[DarvasTuningParam, ...] = (
         "risk_management.entry_post_breakout_consecutive_red_high_vol",
         "entry",
     ),
+    DarvasTuningParam(
+        "target_box_height_multiplier",
+        "risk_management.target_box_height_multiplier",
+        "entry",
+    ),
+    DarvasTuningParam(
+        "dynamic_atr_target_enabled",
+        "risk_management.dynamic_atr_target_enabled",
+        "entry",
+    ),
+    DarvasTuningParam(
+        "dynamic_atr_target_band_pct",
+        "risk_management.dynamic_atr_target_band_pct",
+        "entry",
+    ),
     DarvasTuningParam("max_hold_sessions", "risk_management.max_hold_sessions", "trail"),
     DarvasTuningParam(
         "stale_box_tsl_daily_pct", "risk_management.stale_box_tsl_daily_pct", "trail"
@@ -303,6 +318,9 @@ class RiskManagementConfig(BaseModel):
     entry_require_close_above_sma: bool = True
     entry_sma_period: int = 20
     entry_post_breakout_consecutive_red_high_vol: int = 2
+    target_box_height_multiplier: float = 1.0
+    dynamic_atr_target_enabled: bool = False
+    dynamic_atr_target_band_pct: float = 20.0
 
 
 class TrailingStopConfig(BaseModel):

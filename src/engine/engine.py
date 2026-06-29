@@ -22,6 +22,7 @@ from src.engine.ranking import select_candidates
 from src.engine.sector_rs import compute_sector_rs_percentiles
 from src.data.sector_etfs import SECTOR_ETF_SYMBOLS, SECTOR_INDEX_SYMBOLS
 from src.engine.risk import (
+    compute_dynamic_atr_target_action,
     compute_entry_prices,
     compute_structural_rr,
     compute_trail_action,
@@ -149,13 +150,15 @@ def run_daily_strategy_iteration(
 
         if has_pos:
             pos = open_by_symbol[symbol]
-            if symbol not in context.symbols_with_oco and pos.current_stop_loss > 0:
+            planned_stop = pos.initial_stop_loss if pos.initial_stop_loss is not None else pos.current_stop_loss
+            planned_target = pos.initial_target if pos.initial_target is not None else pos.current_target
+            if symbol not in context.symbols_with_oco and planned_stop > 0:
                 actions.append(
                     PlannedGTTAction(
                         symbol=symbol,
                         action_type=ActionType.ESTABLISH_OCO,
-                        stop_loss_price=pos.current_stop_loss,
-                        target_price=pos.current_target,
+                        stop_loss_price=planned_stop,
+                        target_price=planned_target,
                         quantity=pos.quantity,
                         idempotency_key=make_idempotency_key(
                             symbol, context.target_date, ActionType.ESTABLISH_OCO.value
@@ -193,6 +196,19 @@ def run_daily_strategy_iteration(
                         f"Trail stop for {symbol} to {trail.stop_loss_price:.2f}",
                         symbol=symbol,
                         hold_sessions=hold_sessions,
+                    )
+            dyn_target = compute_dynamic_atr_target_action(
+                pos, state, bars, config, context.target_date
+            )
+            if dyn_target:
+                actions.append(dyn_target)
+                if debug:
+                    debug.log(
+                        context.target_date,
+                        "RISK",
+                        "ATR_DYNAMIC_TARGET",
+                        f"Raise target for {symbol} to {dyn_target.target_price:.2f}",
+                        symbol=symbol,
                     )
 
     for symbol in universe:
