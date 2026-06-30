@@ -38,6 +38,8 @@ REF_START = date(2024, 12, 1)
 REF_END = date(2026, 5, 31)
 SEARCH_START = date(2017, 1, 1)
 MAX_ROUNDS = 3
+SHORTLIST_K = 5
+RELATIVE_TOP_K = 2
 MAX_DD_FEASIBLE = 10.0
 MAX_DD_ANALOG = 8.0
 BEAT_CAGR_PP = 0.005
@@ -189,6 +191,103 @@ def append_log(record: dict) -> None:
         f.write(json.dumps(record, default=str) + "\n")
 
 
+def load_log() -> list[dict]:
+    if not LOG_PATH.is_file():
+        return []
+    return [json.loads(line) for line in LOG_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def summarize_completed_round(records: list[dict], round_num: int) -> list[str]:
+    """Rebuild markdown sections for a round already present in the JSONL log."""
+    rnd = [r for r in records if r.get("round") == round_num]
+    screening = [r for r in rnd if r.get("phase") == "screening"]
+    if not screening:
+        return [f"## Round {round_num:02d} — (no log data)", ""]
+
+    ranked = sorted(
+        screening,
+        key=lambda r: (-r.get("score", -1), r.get("max_drawdown_pct", 99), -r.get("total_closed_trades", 0)),
+    )
+    shortlist = [r["config"] for r in ranked[:SHORTLIST_K]]
+
+    lines = [
+        f"## Round {round_num:02d} — Screening (resumed from log)",
+        "",
+        "### Leaderboard (primary window)",
+        "| Rank | Config | CAGR | Max DD | Trades | Feasible | Score |",
+        "|------|--------|------|--------|--------|----------|-------|",
+    ]
+    for i, r in enumerate(ranked, 1):
+        lines.append(
+            f"| {i} | {r['config']} | {r['cagr']:.2%} | {r['max_drawdown_pct']:.2f}% | "
+            f"{r.get('total_closed_trades', '')} | {r.get('feasible', '')} | {r.get('score', 0):.4f} |"
+        )
+    lines += ["", f"**Top {SHORTLIST_K} shortlist:** {', '.join(shortlist)}", ""]
+
+    for phase, title in (("index-analog", "Index analog"), ("vix-analog", "VIX analog")):
+        phase_rows = [r for r in rnd if r.get("phase") == phase]
+        if not phase_rows:
+            continue
+        analog_data: dict[str, list[dict]] = {n: [] for n in shortlist}
+        for r in phase_rows:
+            if r["config"] in analog_data:
+                analog_data[r["config"]].append(r)
+        verdict = _assess_consistency_from_log(analog_data, shortlist)
+        lines += [
+            f"## Round {round_num:02d} — {title} consistency (resumed from log)",
+            "",
+            f"| Config | Window | CAGR | Max DD | Trades | Consistent? |",
+            f"|--------|--------|------|--------|--------|-------------|",
+        ]
+        for name in shortlist:
+            for i, r in enumerate(analog_data.get(name, []), 1):
+                lines.append(
+                    f"| {name} | {i} | {r['cagr']:.2%} | {r['max_drawdown_pct']:.2f}% | "
+                    f"{r.get('total_closed_trades', '')} | {'✓' if verdict.get(name) else '✗'} |"
+                )
+        lines.append("")
+
+    index_ok = _assess_consistency_from_log(
+        {n: [r for r in rnd if r.get("phase") == "index-analog" and r["config"] == n] for n in shortlist},
+        shortlist,
+    )
+    vix_ok = _assess_consistency_from_log(
+        {n: [r for r in rnd if r.get("phase") == "vix-analog" and r["config"] == n] for n in shortlist},
+        shortlist,
+    )
+    promoted = [n for n in shortlist if index_ok.get(n) and vix_ok.get(n)]
+    lines += [f"## Round {round_num:02d} — Winners promoted", ""]
+    if promoted:
+        for n in promoted:
+            lines.append(f"- **{n}** (passed both analog tests)")
+    else:
+        lines.append("_No configs passed both analog tests._")
+    lines.append("")
+    return lines
+
+
+def _assess_consistency_from_log(
+    analog_rows: dict[str, list[dict]],
+    shortlist: list[str],
+) -> dict[str, bool]:
+    verdict: dict[str, bool] = {name: True for name in shortlist}
+    if not any(analog_rows.values()):
+        return {name: False for name in shortlist}
+    window_count = max(len(v) for v in analog_rows.values())
+    for w_idx in range(window_count):
+        window_metrics = [analog_rows[name][w_idx] for name in shortlist if w_idx < len(analog_rows[name])]
+        if not window_metrics:
+            continue
+        ranked = sorted(window_metrics, key=lambda r: -r["cagr"])
+        top_names = {ranked[i]["config"] for i in range(min(RELATIVE_TOP_K, len(ranked)))}
+        for r in window_metrics:
+            if r["cagr"] < 0 or r["max_drawdown_pct"] > MAX_DD_ANALOG:
+                verdict[r["config"]] = False
+            elif r["config"] not in top_names:
+                verdict[r["config"]] = False
+    return verdict
+
+
 def rank_metrics(rows: list[RunMetrics]) -> list[RunMetrics]:
     return sorted(
         rows,
@@ -255,9 +354,7 @@ def assess_consistency(
     for w_idx in range(window_count):
         window_metrics = [analog_rows[name][w_idx] for name in shortlist]
         ranked = sorted(window_metrics, key=lambda m: -m.cagr)
-        top2 = {ranked[0].config_name}
-        if len(ranked) > 1:
-            top2.add(ranked[1].config_name)
+        top2 = {ranked[i].config_name for i in range(min(RELATIVE_TOP_K, len(ranked)))}
         for m in window_metrics:
             if m.cagr < 0 or m.max_drawdown_pct > MAX_DD_ANALOG:
                 verdict[m.config_name] = False
@@ -277,10 +374,10 @@ def beats_incumbents(candidate: RunMetrics, incumbents: list[RunMetrics]) -> boo
 
 
 def load_overrides_from_yaml(path: Path) -> dict[str, Any]:
-    from src.config import DARVAS_ALGO_PARAM_PATHS
+    from src.config import DARVAS_ALGO_PARAM_PATHS, darvas_algo_snapshot
 
-    base_snap = apply_darvas_algo_overrides(load_config_relaxed(ROOT / "config.yaml"), {})
-    cand_snap = apply_darvas_algo_overrides(load_config_relaxed(path), {})
+    base_snap = darvas_algo_snapshot(load_config_relaxed(ROOT / "config.yaml"))
+    cand_snap = darvas_algo_snapshot(load_config_relaxed(path))
     overrides: dict[str, Any] = {}
     for key, val in cand_snap.items():
         if base_snap.get(key) != val:
@@ -495,7 +592,7 @@ def run_round(
         )
 
     ranked = rank_metrics(screening)
-    shortlist = [m.config_name for m in ranked[:3]]
+    shortlist = [m.config_name for m in ranked[:SHORTLIST_K]]
     section = [
         f"## Round {round_num:02d} — Screening",
         "",
@@ -508,7 +605,7 @@ def run_round(
             f"| {i} | {m.config_name} | {m.cagr:.2%} | {m.max_drawdown_pct:.2f}% | "
             f"{m.total_closed_trades} | {m.feasible} | {m.score:.4f} |"
         )
-    section += ["", f"**Top 3 shortlist:** {', '.join(shortlist)}", ""]
+    section += ["", f"**Top {SHORTLIST_K} shortlist:** {', '.join(shortlist)}", ""]
     results_sections.extend(section)
 
     # Discover analogs once per round
@@ -718,6 +815,12 @@ def main() -> int:
     parser.add_argument("--no-email", action="store_true")
     parser.add_argument("--sanity-only", action="store_true", help="Run baseline sanity check only")
     parser.add_argument("--db", default=None)
+    parser.add_argument(
+        "--resume-from-round",
+        type=int,
+        default=0,
+        help="Skip earlier rounds; rebuild their summary from regime-search-log.jsonl",
+    )
     args = parser.parse_args()
 
     cfg = load_config(ROOT / "config.yaml")
@@ -748,9 +851,36 @@ def main() -> int:
 
     incumbents: list[dict] = []
     top_screening = "baseline"
+    existing_log = load_log()
+    start_round = max(1, args.resume_from_round)
 
-    specs = ROUND1_SPECS
-    for round_num in range(1, MAX_ROUNDS + 1):
+    if start_round > 1:
+        if not existing_log:
+            print(f"No log at {LOG_PATH}; cannot resume from round {start_round}", file=sys.stderr)
+            return 1
+        for r in range(1, start_round):
+            results_sections.extend(summarize_completed_round(existing_log, r))
+        top_from_prior = [
+            r for r in existing_log if r.get("round") == start_round - 1 and r.get("phase") == "screening"
+        ]
+        top_from_prior.sort(
+            key=lambda r: (-r.get("score", -1), r.get("max_drawdown_pct", 99), -r.get("total_closed_trades", 0))
+        )
+        top_screening = top_from_prior[0]["config"] if top_from_prior else "baseline"
+        src = ROOT / "configs" / "experiments" / f"round-{start_round - 1:02d}" / f"{top_screening}.yaml"
+        base_overrides = load_overrides_from_yaml(src) if src.is_file() else {}
+        specs = generate_mutations(top_screening, base_overrides, start_round)
+        results_sections.append(
+            f"## Resuming at round {start_round:02d}\n\n"
+            f"Mutation base: **{top_screening}** (top screening config from round {start_round - 1:02d})\n\n"
+            + "\n".join(f"- `{s.name}`" for s in specs)
+            + "\n"
+        )
+        print(f"Resuming from round {start_round:02d} (log has {len(existing_log)} entries)", flush=True)
+    else:
+        specs = ROUND1_SPECS
+
+    for round_num in range(start_round, MAX_ROUNDS + 1):
         incumbents, had_new_winners, top_screening = run_round(
             round_num, specs, db_path=db_path, incumbents=incumbents, results_sections=results_sections
         )
