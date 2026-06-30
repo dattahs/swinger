@@ -22,6 +22,7 @@ from src.models import ActionType, MarketContext, PlannedGTTAction, make_idempot
 from src.repository.base import Repository
 from src.repository.sqlite import SqliteDataLake
 from src.repository.sqlite_live import SqliteLiveRepository
+from src.live.gtt_bootstrap import bootstrap_pending_gtts_from_bars
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,21 @@ class LiveRunner:
             raise RuntimeError("No trading days in data lake — run bhavcopy ingest first")
 
         pricing_date = self._resolve_pricing_date(session_date)
+
+        if self.live.assume_gtt_fills_from_bars:
+            boot = bootstrap_pending_gtts_from_bars(
+                pricing_date,
+                self.repo,
+                self.data_lake,
+                assume_price_fills=True,
+            )
+            if boot.assumed_fills or boot.still_pending:
+                logger.info(
+                    "GTT bootstrap on %s: assumed fills %s; still pending %s",
+                    pricing_date,
+                    boot.assumed_fills,
+                    boot.still_pending,
+                )
 
         if not self.skip_warmup:
             self._warm_state_registry(session_date, pricing_date)

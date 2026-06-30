@@ -361,6 +361,7 @@ class LiveConfig(BaseModel):
     mock_broker: bool = False
     initial_capital_inr: float = 500_000.0
     override_broker_capital: bool = False
+    assume_gtt_fills_from_bars: bool = False
     warmup_state: bool = True
     warmup_from: date = date(2025, 10, 1)
     warmup_cache_dir: str = "./data/live/warmup_cache"

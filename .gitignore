@@ -25,3 +25,5 @@ scripts/deploy/vps/.env
 scripts/deploy/vps/config.yaml
 src/agentic-loop/*.log
 src/agentic-loop/*-log.jsonl
+council_*.json
+scripts/_tmp_*

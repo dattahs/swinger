@@ -118,6 +118,17 @@ def reconcile_broker_state(
 
     for sym, lpos in ledger_positions.items():
         if sym not in broker_by_symbol:
+            if sym in (repo.get_system_state("assumed_gtt_fill_symbols") or []):
+                drifts.append(
+                    ReconciliationDrift(
+                        kind="assumed_fill_not_at_broker",
+                        symbol=sym,
+                        message=f"Ledger assumed GTT fill for {sym}; broker has no position (kept)",
+                        broker_value="0",
+                        ledger_value=str(lpos.quantity),
+                    )
+                )
+                continue
             drifts.append(
                 ReconciliationDrift(
                     kind="position_missing_at_broker",
