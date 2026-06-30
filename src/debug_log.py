@@ -60,6 +60,7 @@ def humanize_skip_reason(code: str) -> str:
         "SECTOR_CAP": "Sector exposure cap would be exceeded",
         "RANKED_OUT": "Lower rank than selected candidates",
         "BOX_RESET_REQUIRED": "Re-entry blocked until box resets to SCANNING",
+        "SECTOR_REGIME_GATE": "Sector regime gate — synchronized ranging / low council exposure",
     }
     return mapping.get(code, code.replace("_", " ").lower())
 

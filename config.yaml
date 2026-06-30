@@ -135,6 +135,16 @@ candidate_ranking:
   tiebreakers: [sector_rs_percentile, breakout_volume_ratio]
   sector_rs_lookback_days: 63
 
+# Sector regime council gate (toggle enabled for ranging/low-exposure chop).
+sector_regime_gate:
+  enabled: false
+  council_window_months: 6
+  require_dominant_regime: RANGING
+  require_dispersion: LOW
+  max_recommended_exposure: 0.30
+  vix_csv_path: "./data/processed/india_vix_daily.csv"
+  skip_breadth: true
+
 live:
   paper_mode: true
   local_db_path: ./data/live/swinger_live.db

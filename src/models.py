@@ -39,6 +39,7 @@ class SkipReason(str, Enum):
     KILL_SWITCH = "KILL_SWITCH"
     STRUCTURAL_R_BELOW_MIN = "STRUCTURAL_R_BELOW_MIN"
     BOX_RESET_REQUIRED = "BOX_RESET_REQUIRED"
+    SECTOR_REGIME_GATE = "SECTOR_REGIME_GATE"
     STALE_BREAKOUT = "STALE_BREAKOUT"
     BREAKOUT_FAILED = "BREAKOUT_FAILED"
 
@@ -67,6 +68,7 @@ class MarketContext(BaseModel):
     settled_cash_inr: float
     open_positions: list[OpenPosition] = Field(default_factory=list)
     kill_switch_active: bool = False
+    sector_regime_gate_active: bool = False
     symbols_with_oco: set[str] = Field(default_factory=set)
 
 

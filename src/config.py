@@ -343,6 +343,18 @@ class CandidateRankingConfig(BaseModel):
     sector_rs_lookback_days: int = 63
 
 
+class SectorRegimeGateConfig(BaseModel):
+    """Optional council gate: skip new entries in synchronized ranging / low-exposure regimes."""
+
+    enabled: bool = False
+    council_window_months: int = 6
+    require_dominant_regime: str = "RANGING"
+    require_dispersion: str = "LOW"
+    max_recommended_exposure: float = 0.30
+    vix_csv_path: str = "./data/processed/india_vix_daily.csv"
+    skip_breadth: bool = True
+
+
 class LiveConfig(BaseModel):
     """Local / paper live execution settings (Section 9)."""
 
@@ -378,6 +390,7 @@ class AppConfig(BaseModel):
     trailing_stop: TrailingStopConfig = Field(default_factory=TrailingStopConfig)
     r_managed_runner: RManagedRunnerConfig = Field(default_factory=RManagedRunnerConfig)
     candidate_ranking: CandidateRankingConfig = Field(default_factory=CandidateRankingConfig)
+    sector_regime_gate: SectorRegimeGateConfig = Field(default_factory=SectorRegimeGateConfig)
 
     @model_validator(mode="after")
     def validate_auth_binding(self) -> AppConfig:
@@ -484,5 +497,6 @@ def load_config_relaxed(path: str | Path) -> AppConfig:
         trailing_stop=TrailingStopConfig.model_validate(raw.get("trailing_stop", {})),
         r_managed_runner=RManagedRunnerConfig.model_validate(raw.get("r_managed_runner", {})),
         candidate_ranking=CandidateRankingConfig.model_validate(raw.get("candidate_ranking", {})),
+        sector_regime_gate=SectorRegimeGateConfig.model_validate(raw.get("sector_regime_gate", {})),
         live=LiveConfig.model_validate(raw.get("live", {})),
     )

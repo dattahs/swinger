@@ -56,6 +56,19 @@ def select_candidates(
                 )
         return actions, skip_map
 
+    if context.sector_regime_gate_active:
+        for c in candidates:
+            skip_map[c.symbol] = SkipReason.SECTOR_REGIME_GATE
+            if debug:
+                debug.reject(
+                    context.target_date,
+                    c.symbol,
+                    "RANK",
+                    SkipReason.SECTOR_REGIME_GATE.value,
+                    humanize_skip_reason(SkipReason.SECTOR_REGIME_GATE.value),
+                )
+        return actions, skip_map
+
     open_positions = [p for p in context.open_positions if p.is_active]
     open_count = len(open_positions)
     if open_count >= rm.max_concurrent_positions:

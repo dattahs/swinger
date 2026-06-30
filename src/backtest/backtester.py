@@ -19,6 +19,7 @@ from src.debug_log import ActionDebugLogger, ProgressLogger
 from src.data.sector_etfs import SECTOR_INDEX_SYMBOLS
 from src.engine.adaptive_lookback import reset_lookback_cadence_state
 from src.engine.engine import PriceDataMatrix, run_daily_strategy_iteration
+from src.engine.sector_regime_gate import build_gate_schedule, gate_active_on
 from src.models import ActionType, BoxStateEnum, MarketContext
 from src.repository.sqlite import SqliteBacktestRepository, SqliteDataLake
 
@@ -190,6 +191,25 @@ class Backtester:
             run_start = time.monotonic()
             reset_lookback_cadence_state()
 
+        gate_schedule: dict = {}
+        if self.config.sector_regime_gate.enabled:
+            if persist_outputs:
+                self._progress.info("Building sector regime gate schedule (month-end council)...")
+            gate_t0 = time.monotonic()
+            gate_schedule = build_gate_schedule(
+                trading_days,
+                db_path=_resolve_path(self.repo_root, self.config.backtest.data_db_path),
+                vix_path=Path(self.config.sector_regime_gate.vix_csv_path),
+                cfg=self.config.sector_regime_gate,
+                repo_root=self.repo_root,
+            )
+            if persist_outputs:
+                blocked_days = sum(1 for s in trading_days if gate_active_on(gate_schedule, s))
+                self._progress.info(
+                    f"Gate schedule ready in {time.monotonic() - gate_t0:.1f}s "
+                    f"({blocked_days}/{len(trading_days)} sessions blocked)"
+                )
+
         kill_state = self.repo.get_system_state("kill_switch") or {"active": False}
         state_registry = self.repo.get_state_registry()
         total_days = len(trading_days)
@@ -295,6 +315,7 @@ class Backtester:
                     settled_cash_inr=self.broker.portfolio.settled_cash,
                     open_positions=open_positions,
                     kill_switch_active=bool(kill_state.get("active")),
+                    sector_regime_gate_active=gate_active_on(gate_schedule, session),
                     symbols_with_oco=self.broker.symbols_with_oco(),
                 )
 
